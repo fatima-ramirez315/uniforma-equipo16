@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Catálogo{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>Catálogo de uniformes</h1><p class="muted">Consulta modelos, tallas y existencias en tiempo real. Para apartar, acude a mostrador con tu anticipo del 50&nbsp;%.</p></div>
+</div>
+
+<form method="get" class="filters card">
+  <div class="field"><label for="q">Buscar</label><input class="input" id="q" name="q" value="{{ q }}" placeholder="Modelo, color o código"></div>
+  <div class="field"><label for="categoria">Categoría</label>
+    <select class="input" id="categoria" name="categoria"><option value="">Todas</option>
+      {% for v, n in categorias %}<option value="{{ v }}" {% if v == categoria %}selected{% endif %}>{{ n }}</option>{% endfor %}
+    </select></div>
+  <div class="field"><label for="talla">Talla</label>
+    <select class="input" id="talla" name="talla"><option value="">Todas</option>
+      {% for t in tallas %}<option value="{{ t }}" {% if t == talla %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select></div>
+  <div class="field"><label><input class="check" type="checkbox" name="disponibles" value="1" {% if solo_disp %}checked{% endif %}> Solo con existencia</label></div>
+  <button class="btn" type="submit">Filtrar</button>
+  <a class="btn ghost" href="{% url 'tienda:catalogo' %}">Limpiar</a>
+</form>
+
+{% if prendas %}
+<div class="grid g3">
+  {% for p in prendas %}
+  <article class="card prenda">
+    <div class="sw"></div>
+    <span class="muted small">{{ p.get_categoria_display }} · {{ p.codigo }}</span>
+    <strong>{{ p.modelo }}</strong>
+    <span>Talla <b>{{ p.talla }}</b> · {{ p.color }}</span>
+    <span class="precio">${{ p.precio|floatformat:2 }}</span>
+    {% if p.stock == 0 %}<span class="tag bad">Agotado · disponible por pedido especial</span>
+    {% elif p.stock <= p.stock_minimo %}<span class="tag warn">Últimas {{ p.stock }} pieza{{ p.stock|pluralize }}</span>
+    {% else %}<span class="tag ok">Disponible · {{ p.stock }} pzas</span>{% endif %}
+    {% if es_personal %}<a class="btn sm ghost" href="{% url 'tienda:apartado_nuevo' %}?prenda={{ p.pk }}{% if p.stock == 0 %}&tipo=ESPECIAL{% endif %}">{% if p.stock == 0 %}Pedido especial{% else %}Apartar{% endif %}</a>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty">No encontramos prendas con esos filtros.</div>
+{% endif %}
+{% endblock %}

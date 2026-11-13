@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Ingreso del personal{% endblock %}
+{% block content %}
+<div class="login card">
+  <h1>Ingreso del personal</h1>
+  <p class="muted">Acceso para vendedores y gerente de Uniforma.</p>
+  <form method="post">{% csrf_token %}
+    {% include "tienda/_form_fields.html" %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button class="btn" type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}

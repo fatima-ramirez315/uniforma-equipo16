@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Seguimiento de apartado{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Seguimiento de tu apartado</h1><p class="muted">Escribe tu folio (viene en tu comprobante) y el teléfono con el que te registraron.</p></div></div>
+
+<form method="get" class="filters card">
+  {% for f in form %}<div class="field"><label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}{{ f.errors }}</div>{% endfor %}
+  <button class="btn" type="submit">Consultar</button>
+</form>
+
+{% if buscado and not apartado %}
+  <div class="card empty">No encontramos un apartado con ese folio y teléfono. Verifica los datos o pregunta en mostrador.</div>
+{% endif %}
+
+{% if apartado %}
+{% with ap=apartado %}
+<div class="card">
+  <div class="head" style="margin-bottom:6px">
+    <div><h2 style="margin:0">{{ ap.folio }} · {{ ap.get_tipo_display }}</h2><span class="muted">{{ ap.cantidad }} × {{ ap.prenda }}</span></div>
+    <span class="tag {% if ap.estado == 'PAGADO' or ap.estado == 'ENTREGADO' %}ok{% elif ap.estado == 'CANCELADO' or ap.estado == 'VENCIDO' %}bad{% else %}warn{% endif %}">{{ ap.get_estado_display }}</span>
+  </div>
+
+  {% if ap.estado == 'CANCELADO' or ap.estado == 'VENCIDO' %}
+    <div class="steps"><div class="step done">Apartado registrado</div><div class="step bad">{{ ap.get_estado_display }}</div></div>
+  {% else %}
+    <div class="steps">
+      <div class="step done">1. Apartado registrado</div>
+      <div class="step {% if ap.estado == 'ACTIVO' %}now{% else %}done{% endif %}">2. Abonos</div>
+      <div class="step {% if ap.estado == 'PAGADO' %}now{% elif ap.estado == 'ENTREGADO' %}done{% endif %}">3. Liquidado · listo para recoger</div>
+      <div class="step {% if ap.estado == 'ENTREGADO' %}done{% endif %}">4. Entregado</div>
+    </div>
+  {% endif %}
+
+  <dl class="kv" style="margin-top:14px">
+    <dt>Cliente</dt><dd>{{ ap.cliente.nombre }}</dd>
+    <dt>Total</dt><dd>${{ ap.total|floatformat:2 }}</dd>
+    <dt>Pagado</dt><dd>${{ ap.pagado|floatformat:2 }}</dd>
+    <dt>Saldo pendiente</dt><dd><b>${{ ap.saldo|floatformat:2 }}</b></dd>
+    <dt>Vigente hasta</dt><dd>{{ ap.vence|date:"d/m/Y" }}{% if ap.estado == 'ACTIVO' %} <span class="muted">({{ ap.dias_restantes }} día{{ ap.dias_restantes|pluralize }})</span>{% endif %}</dd>
+  </dl>
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card"><h2>Pagos</h2>
+    <ul class="avisos">{% for p in pagos %}<li>{{ p.fecha|date:"d/m/Y H:i" }} · {{ p.get_tipo_display }} · <b>${{ p.monto|floatformat:2 }}</b> <span class="muted">({{ p.get_metodo_display }})</span></li>{% endfor %}</ul></div>
+  <div class="card"><h2>Avisos</h2>
+    <ul class="avisos">{% for a in avisos %}<li><span class="muted small">{{ a.fecha|date:"d/m/Y H:i" }}</span><br>{{ a.mensaje }}</li>{% empty %}<li class="muted">Sin avisos.</li>{% endfor %}</ul></div>
+</div>
+{% endwith %}
+{% endif %}
+{% endblock %}

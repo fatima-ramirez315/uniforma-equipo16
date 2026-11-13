@@ -1,6 +1,4 @@
 asgiref==3.13.0
 Django==5.2.19
-psycopg==3.3.8
-psycopg-binary==3.3.8
-python-dotenv==1.2.4
+psycopg2-binary==2.9.13
 sqlparse==0.6.1

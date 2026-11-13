@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Apartado {{ ap.folio }}{% endblock %}
+{% block content %}
+<div class="head">
+  <div><h1>{{ ap.folio }} · {{ ap.get_tipo_display }}</h1><span class="muted">Registrado por {{ ap.vendedor.get_username }} el {{ ap.creado|date:"d/m/Y H:i" }}</span></div>
+  <span class="tag {% if ap.estado == 'PAGADO' or ap.estado == 'ENTREGADO' %}ok{% elif ap.estado == 'CANCELADO' or ap.estado == 'VENCIDO' %}bad{% else %}warn{% endif %}">{{ ap.get_estado_display }}</span>
+</div>
+
+<div class="grid g2">
+  <div class="card"><h2>Datos</h2>
+    <dl class="kv">
+      <dt>Cliente</dt><dd>{{ ap.cliente.nombre }} · {{ ap.cliente.telefono }}</dd>
+      <dt>Prenda</dt><dd>{{ ap.cantidad }} × {{ ap.prenda }}</dd>
+      <dt>Total</dt><dd>${{ ap.total|floatformat:2 }}</dd>
+      <dt>Pagado</dt><dd>${{ ap.pagado|floatformat:2 }}</dd>
+      <dt>Saldo</dt><dd><b>${{ ap.saldo|floatformat:2 }}</b></dd>
+      <dt>Vence</dt><dd>{{ ap.vence|date:"d/m/Y" }}{% if ap.es_activo %} <span class="muted">({{ ap.dias_restantes }} día{{ ap.dias_restantes|pluralize }})</span>{% endif %}</dd>
+      {% if ap.notas %}<dt>Notas</dt><dd>{{ ap.notas }}</dd>{% endif %}
+      {% if ap.motivo_cancelacion %}<dt>Motivo de cancelación</dt><dd>{{ ap.motivo_cancelacion }}</dd>{% endif %}
+    </dl>
+  </div>
+
+  <div class="card"><h2>Acciones</h2>
+    {% if ap.es_activo %}
+      <form method="post" action="{% url 'tienda:apartado_pago' ap.pk %}">{% csrf_token %}
+        {% include "tienda/_form_fields.html" with form=pago_form %}
+        <button class="btn" type="submit">Registrar pago</button>
+      </form>
+      <hr>
+    {% endif %}
+    {% if ap.puede_entregarse %}
+      <form method="post" action="{% url 'tienda:apartado_entregar' ap.pk %}">{% csrf_token %}<button class="btn" type="submit">Marcar como entregado</button></form>
+      <hr>
+    {% endif %}
+    {% if ap.puede_cancelarse %}
+      <form method="post" action="{% url 'tienda:apartado_cancelar' ap.pk %}">{% csrf_token %}
+        {% include "tienda/_form_fields.html" with form=cancelar_form %}
+        <button class="btn ghost" type="submit">Cancelar apartado</button>
+      </form>
+    {% endif %}
+    {% if not ap.es_activo and not ap.puede_entregarse and not ap.puede_cancelarse %}<p class="muted">Este apartado ya no admite acciones.</p>{% endif %}
+  </div>
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card"><h2>Pagos</h2>
+    <ul class="avisos">{% for p in pagos %}<li>{{ p.fecha|date:"d/m/Y H:i" }} · {{ p.get_tipo_display }} · <b>${{ p.monto|floatformat:2 }}</b> <span class="muted">({{ p.get_metodo_display }} · {{ p.registrado_por.get_username }})</span></li>
+    {% empty %}<li class="muted">Sin pagos.</li>{% endfor %}</ul></div>
+  <div class="card"><h2>Avisos al cliente</h2>
+    <ul class="avisos">{% for a in avisos %}<li><span class="muted small">{{ a.fecha|date:"d/m/Y H:i" }} · {{ a.get_tipo_display }}</span><br>{{ a.mensaje }}</li>
+    {% empty %}<li class="muted">Sin avisos.</li>{% endfor %}</ul></div>
+</div>
+<p><a href="{% url 'tienda:apartados' %}">← Volver a apartados</a></p>
+{% endblock %}

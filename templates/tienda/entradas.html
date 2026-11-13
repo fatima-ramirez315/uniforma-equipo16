@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Entrada de mercancía{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Entrada de mercancía</h1><p class="muted">Al registrar piezas recibidas, el stock sube y se avisa a quienes esperan un pedido especial de esa prenda.</p></div></div>
+<div class="grid g2">
+  <div class="card"><h2>Registrar entrada</h2>
+    <form method="post">{% csrf_token %}{% include "tienda/_form_fields.html" %}<button class="btn" type="submit">Registrar entrada</button></form></div>
+  <div class="card"><h2>Últimas entradas</h2>
+    <ul class="avisos">{% for e in entradas %}<li><b>+{{ e.cantidad }}</b> {{ e.prenda }}<br><span class="muted small">{{ e.fecha|date:"d/m/Y H:i" }} · {{ e.proveedor }}{% if e.remision %} · remisión {{ e.remision }}{% endif %} · {{ e.registrado_por.get_username }}</span></li>
+    {% empty %}<li class="muted">Todavía no hay entradas.</li>{% endfor %}</ul></div>
+</div>
+{% endblock %}

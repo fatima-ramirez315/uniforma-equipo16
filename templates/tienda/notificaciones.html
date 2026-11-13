@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Avisos{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Avisos al cliente</h1><p class="muted">Mensajes generados por el sistema. Comunícalos al cliente por teléfono o WhatsApp y márcalos como atendidos.</p></div>
+  <div class="actions">
+    <a class="btn {% if ver != 'todas' %}{% else %}ghost{% endif %}" href="?ver=pendientes">Pendientes</a>
+    <a class="btn {% if ver == 'todas' %}{% else %}ghost{% endif %}" href="?ver=todas">Todos</a>
+  </div>
+</div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Mensaje</th><th></th></tr></thead>
+  <tbody>{% for a in avisos %}<tr>
+    <td>{{ a.fecha|date:"d/m/Y H:i" }}</td>
+    <td>{{ a.cliente.nombre }}<br><span class="muted small">{{ a.cliente.telefono }}</span></td>
+    <td><span class="tag">{{ a.get_tipo_display }}</span></td>
+    <td>{{ a.mensaje }} <a href="{% url 'tienda:apartado_detalle' a.apartado_id %}">{{ a.apartado.folio }}</a></td>
+    <td>{% if a.atendida %}<span class="tag ok">Atendido</span>{% else %}
+      <form method="post" action="{% url 'tienda:notificacion_atendida' a.pk %}" style="margin:0">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn ghost" type="submit">Marcar atendido</button></form>{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="5" class="empty">No hay avisos.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

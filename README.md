@@ -1,52 +1,41 @@
-# Uniforma — Sistema de apartados e inventario de uniformes
+# Uniforma — Sistema de apartados e inventario (Equipo 16)
 
-**Materia:** Ingeniería de Software (Unidad 3, E1) · **Equipo 16** · ITZ
-**Integrantes:** Ricardo Uriel Mejía Cortez, Fatima Blancas Ramírez
-**Propósito:** controlar existencias de uniformes, registrar apartados con anticipo del 50 % y dar
-seguimiento a pedidos, para corregir la inconsistencia de información detectada en la tienda.
-**Tipo de aplicación:** web.
+Aplicación web para la tienda de uniformes "Uniforma": consulta de disponibilidad, apartados y pedidos
+especiales con anticipo del 50 %, pagos/abonos, avisos al cliente, vencimiento a 30 días, inventario,
+entradas de mercancía y reportes. Stack: **Django 5.2 + PostgreSQL** (HTML/CSS sin frameworks).
 
-## Stack y versiones
-Python 3.13 · Django 5.2 · PostgreSQL 16 · psycopg 3.3 · python-dotenv 1.2 · VS Code · Git/GitHub.
-Versiones exactas de librerías en `requirements.txt`.
+## Requisitos
+Python 3.11+ y PostgreSQL 14+.
 
-## Estado E1
-Entorno, proyecto y BD de 7 tablas funcionando con migraciones; consulta técnica `/conexion/`
-operativa. Los casos de uso se construyen en E2 (ver `docs/alcance_e1.md`).
-
-## Instalación y ejecución
+## Instalación
 ```bash
-git clone <URL-del-repositorio> && cd uniforma
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python -m venv venv && source venv/bin/activate      # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# 1) BD y usuario en PostgreSQL (edita antes la contraseña del archivo)
-psql -U postgres -f database/crear_bd.sql
-
-# 2) Variables de entorno: copia el ejemplo y pon tus valores
-cp .env.example .env               # Windows: copy .env.example .env
-
-# 3) Tablas y datos ficticios
-python manage.py migrate
-python manage.py cargar_datos_demo
-
-# 4) Iniciar
-python manage.py runserver
 ```
-Abrir **http://127.0.0.1:8000/conexion/**: muestra el número de registros de cada tabla y la lista
-de prendas leída desde PostgreSQL.
 
-## Configuración
-`config/settings.py` carga `.env` con `python-dotenv` (Django no lo lee por sí solo) y toma
-`DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`.
-`.env` está en `.gitignore`; solo se sube `.env.example` (sin claves reales).
+## Base de datos (sin contraseñas en el código)
+```sql
+CREATE USER uniforma WITH PASSWORD 'tu-contraseña';
+CREATE DATABASE uniforma_db OWNER uniforma;
+```
+Copia `.env.example` a `.env` y escribe tu contraseña en `DB_PASSWORD`. `config/settings.py` lee todo
+desde variables de entorno / `.env` (ignorado por git). Para una prueba rápida sin PostgreSQL: `DB_ENGINE=sqlite`.
+
+## Ejecución
+```bash
+python manage.py migrate
+python manage.py seed_demo      # crea usuarios gerente/vendedor (contraseñas aleatorias que imprime), catálogo y apartados
+python manage.py runserver      # http://127.0.0.1:8000
+```
+
+## Pruebas
+```bash
+python manage.py test           # 29 pruebas que cubren RF-01 a RF-16
+```
+
+## Vencimientos automáticos (RF-13)
+`python manage.py vencer_apartados` (programable con cron) o el botón "Revisar vencimientos" del gerente.
 
 ## Estructura
-```
-config/    configuración del proyecto Django
-tienda/    app: models.py (7 tablas), views.py, migrations/, comando cargar_datos_demo
-database/  crear_bd.sql (BD y usuario) y notas de creación
-docs/      alcance, responsables y acuerdo de integración
-```
-Todos los datos de demostración son ficticios.
+- `tienda/models.py` modelos · `tienda/services.py` reglas de negocio (transacciones) · `tienda/views.py` vistas
+- `tienda/permisos.py` roles Vendedor/Gerente · `templates/` pantallas · `tienda/tests.py` pruebas

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Nuevo apartado{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Nuevo apartado o pedido especial</h1>
+  <p class="muted">Se requiere un anticipo mínimo del 50 % del total (RN-01). El apartado vence a los 30 días.</p></div></div>
+<div class="grid g2">
+  <div class="card">
+    <form method="post">{% csrf_token %}
+      {% include "tienda/_form_fields.html" %}
+      <div class="actions"><button class="btn" type="submit">Registrar apartado</button><a class="btn ghost" href="{% url 'tienda:apartados' %}">Cancelar</a></div>
+    </form>
+  </div>
+  <div class="card"><h2>Resumen</h2>
+    <dl class="kv">
+      <dt>Existencias</dt><dd id="r-stock">—</dd>
+      <dt>Total</dt><dd id="r-total">—</dd>
+      <dt>Anticipo mínimo (50 %)</dt><dd id="r-min">—</dd>
+    </dl>
+    <p class="muted small">Los pedidos especiales no descuentan existencias: la prenda se pide al proveedor.</p>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+{{ precios|json_script:"precios" }}
+{{ stocks|json_script:"stocks" }}
+<script>
+(function () {
+  var precios = JSON.parse(document.getElementById("precios").textContent);
+  var stocks = JSON.parse(document.getElementById("stocks").textContent);
+  var prenda = document.getElementById("id_prenda"), cant = document.getElementById("id_cantidad"), ant = document.getElementById("id_anticipo");
+  function money(n) { return "$" + n.toFixed(2); }
+  function calc() {
+    var p = parseFloat(precios[prenda.value]), q = parseInt(cant.value, 10) || 0;
+    if (!p) { return; }
+    var total = p * q;
+    document.getElementById("r-total").textContent = money(total);
+    document.getElementById("r-min").textContent = money(total / 2);
+    document.getElementById("r-stock").textContent = stocks[prenda.value] + " pieza(s)";
+  }
+  [prenda, cant].forEach(function (el) { el.addEventListener("input", calc); });
+  calc();
+})();
+</script>
+{% endblock %}

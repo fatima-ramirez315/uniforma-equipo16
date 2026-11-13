@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Reportes{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Reportes</h1><p class="muted">Vista del gerente: ventas, apartados e inventario.</p></div></div>
+
+<div class="grid g3">
+  <div class="card stat"><div class="n">${{ ingresos|floatformat:2 }}</div><div class="l">Pagos recibidos</div></div>
+  <div class="card stat"><div class="n">${{ valor_inventario|floatformat:2 }}</div><div class="l">Valor del inventario</div></div>
+  <div class="card stat"><div class="n">{{ stock_bajo|length }}</div><div class="l">Prendas con stock bajo</div></div>
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card"><h2>Apartados por estado</h2>
+    <div class="tablewrap"><table><thead><tr><th>Estado</th><th class="num">Cantidad</th><th class="num">Monto</th></tr></thead>
+    <tbody>{% for r in por_estado %}<tr><td>{{ r.estado }}</td><td class="num">{{ r.n }}</td><td class="num">${{ r.total|floatformat:2 }}</td></tr>
+    {% empty %}<tr><td colspan="3" class="empty">Sin datos.</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><h2>Prendas más apartadas</h2>
+    <div class="tablewrap"><table><thead><tr><th>Modelo</th><th>Talla</th><th class="num">Piezas</th></tr></thead>
+    <tbody>{% for t in top %}<tr><td>{{ t.prenda__modelo }}</td><td>{{ t.prenda__talla }}</td><td class="num">{{ t.piezas }}</td></tr>
+    {% empty %}<tr><td colspan="3" class="empty">Sin datos.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+
+<div class="grid g2" style="margin-top:16px">
+  <div class="card"><h2>Apartados con saldo, por vencer primero</h2>
+    <div class="tablewrap"><table><thead><tr><th>Folio</th><th>Cliente</th><th>Vence</th><th class="num">Saldo</th></tr></thead>
+    <tbody>{% for a in activos %}<tr><td><a href="{% url 'tienda:apartado_detalle' a.pk %}">{{ a.folio }}</a></td><td>{{ a.cliente.nombre }}</td><td>{{ a.vence|date:"d/m/Y" }}</td><td class="num">${{ a.saldo|floatformat:2 }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">Sin apartados con saldo.</td></tr>{% endfor %}</tbody></table></div></div>
+  <div class="card"><h2>Stock bajo</h2>
+    <ul class="avisos">{% for p in stock_bajo %}<li>{{ p }} — <span class="tag {% if p.stock == 0 %}bad{% else %}warn{% endif %}">{{ p.stock }} pzas</span> <a href="{% url 'tienda:entradas' %}?prenda={{ p.pk }}">Registrar entrada</a></li>
+    {% empty %}<li class="muted">Todo en orden.</li>{% endfor %}</ul></div>
+</div>
+{% endblock %}

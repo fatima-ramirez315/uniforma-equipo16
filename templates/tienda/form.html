@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }}{% endblock %}
+{% block content %}
+<div class="head"><h1>{{ titulo }}</h1></div>
+<div class="card" style="max-width:620px">
+  <form method="post">{% csrf_token %}
+    {% include "tienda/_form_fields.html" %}
+    <div class="actions"><button class="btn" type="submit">Guardar</button><a class="btn ghost" href="{% url volver %}">Cancelar</a></div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% load static %}<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Uniforma{% endblock %} · Uniforma</title>
+  <link rel="stylesheet" href="{% static 'tienda/app.css' %}">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="{% url 'tienda:catalogo' %}">UNIFORMA</a>
+    <nav aria-label="Principal">
+      {% url 'tienda:catalogo' as u_cat %}{% url 'tienda:seguimiento' as u_seg %}
+      <a href="{{ u_cat }}" {% if request.path == u_cat %}class="on"{% endif %}>Catálogo</a>
+      <a href="{{ u_seg }}" {% if request.path == u_seg %}class="on"{% endif %}>Mi apartado</a>
+      {% if es_personal %}
+        <a href="{% url 'tienda:panel' %}">Panel</a>
+        <a href="{% url 'tienda:apartados' %}">Apartados</a>
+        <a href="{% url 'tienda:clientes' %}">Clientes</a>
+        <a href="{% url 'tienda:prendas' %}">Inventario{% if nav_stock_bajo %}<span class="badge" title="Prendas con stock bajo">{{ nav_stock_bajo }}</span>{% endif %}</a>
+        <a href="{% url 'tienda:notificaciones' %}">Avisos{% if nav_pendientes %}<span class="badge">{{ nav_pendientes }}</span>{% endif %}</a>
+        {% if es_gerente %}
+          <a href="{% url 'tienda:entradas' %}">Entradas</a>
+          <a href="{% url 'tienda:reportes' %}">Reportes</a>
+        {% endif %}
+      {% endif %}
+    </nav>
+    {% if user.is_authenticated %}
+      <span class="who">{{ user.get_username }}</span>
+      <form method="post" action="{% url 'tienda:logout' %}" style="margin:0">{% csrf_token %}<button class="linkbtn" type="submit">Salir</button></form>
+    {% else %}
+      <a class="linkbtn" href="{% url 'tienda:login' %}">Personal</a>
+    {% endif %}
+  </div>
+</header>
+
+<main class="wrap">
+  {% if messages %}
+    <ul class="msgs" role="status">{% for m in messages %}<li class="{{ m.tags }}">{{ m }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+<footer>Uniforma · Sistema de apartados e inventario · Equipo 16</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Apartados{% endblock %}
+{% block content %}
+<div class="head"><h1>Apartados y pedidos especiales</h1><a class="btn" href="{% url 'tienda:apartado_nuevo' %}">+ Nuevo apartado</a></div>
+<form method="get" class="filters card">
+  <div class="field"><label for="q">Buscar</label><input class="input" id="q" name="q" value="{{ q }}" placeholder="Folio, nombre o teléfono"></div>
+  <div class="field"><label for="estado">Estado</label><select class="input" id="estado" name="estado"><option value="">Todos</option>{% for v, n in estados %}<option value="{{ v }}" {% if v == estado %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></div>
+  <div class="field"><label for="tipo">Tipo</label><select class="input" id="tipo" name="tipo"><option value="">Todos</option>{% for v, n in tipos %}<option value="{{ v }}" {% if v == tipo %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></div>
+  <button class="btn" type="submit">Filtrar</button><a class="btn ghost" href="{% url 'tienda:apartados' %}">Limpiar</a>
+</form>
+<div class="tablewrap"><table>
+  <thead><tr><th>Folio</th><th>Cliente</th><th>Prenda</th><th>Tipo</th><th>Estado</th><th>Vence</th><th class="num">Total</th><th class="num">Saldo</th></tr></thead>
+  <tbody>{% for a in apartados %}<tr>
+    <td><a href="{% url 'tienda:apartado_detalle' a.pk %}">{{ a.folio }}</a></td><td>{{ a.cliente.nombre }}</td><td>{{ a.cantidad }} × {{ a.prenda }}</td>
+    <td>{% if a.tipo == 'ESPECIAL' %}<span class="tag warn">Especial</span>{% else %}Inventario{% endif %}</td>
+    <td><span class="tag {% if a.estado == 'PAGADO' or a.estado == 'ENTREGADO' %}ok{% elif a.estado == 'CANCELADO' or a.estado == 'VENCIDO' %}bad{% endif %}">{{ a.get_estado_display }}</span></td>
+    <td>{{ a.vence|date:"d/m/Y" }}</td><td class="num">${{ a.total|floatformat:2 }}</td><td class="num">${{ a.saldo|floatformat:2 }}</td></tr>
+  {% empty %}<tr><td colspan="8" class="empty">Sin resultados.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}
