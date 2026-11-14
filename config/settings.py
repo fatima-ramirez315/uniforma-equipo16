@@ -27,7 +27,7 @@ _load_env_file()
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-cambia-esta-clave-en-produccion")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = [h for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h]
+ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -41,6 +41,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",  # <--- Agrégala aquí exactamente
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -118,3 +119,5 @@ ANTICIPO_PORCENTAJE = 50   # RN-01: anticipo mínimo del 50 % para apartar
 VIGENCIA_APARTADO_DIAS = 30  # Un apartado vence a los 30 días
 SOLICITUD_VIGENCIA_DIAS = 7  # Una solicitud en línea sin anticipo caduca a los 7 días
 AVISO_VENCIMIENTO_DIAS = 5   # Se avisa al cliente N días antes de vencer
+# Configuración de archivos estáticos con WhiteNoise para producción
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
