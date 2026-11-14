@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Apartado {{ ap.folio }}{% endblock %}
+{% block title %}Pedido {{ ap.folio }}{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>{{ ap.folio }} · {{ ap.get_tipo_display }}</h1><span class="muted">Registrado por {{ ap.vendedor.get_username }} el {{ ap.creado|date:"d/m/Y H:i" }}</span></div>
+  <div><h1>{{ ap.folio }} · {{ ap.get_origen_display }}</h1><span class="muted">{% if ap.vendedor %}Registrado por {{ ap.vendedor.get_username }}{% else %}Solicitud del cliente{% endif %} el {{ ap.creado|date:"d/m/Y H:i" }}</span></div>
   <span class="tag {% if ap.estado == 'PAGADO' or ap.estado == 'ENTREGADO' %}ok{% elif ap.estado == 'CANCELADO' or ap.estado == 'VENCIDO' %}bad{% else %}warn{% endif %}">{{ ap.get_estado_display }}</span>
 </div>
 
@@ -10,17 +10,25 @@
   <div class="card"><h2>Datos</h2>
     <dl class="kv">
       <dt>Cliente</dt><dd>{{ ap.cliente.nombre }} · {{ ap.cliente.telefono }}</dd>
-      <dt>Prenda</dt><dd>{{ ap.cantidad }} × {{ ap.prenda }}</dd>
-      <dt>Total</dt><dd>${{ ap.total|floatformat:2 }}</dd>
-      <dt>Pagado</dt><dd>${{ ap.pagado|floatformat:2 }}</dd>
-      <dt>Saldo</dt><dd><b>${{ ap.saldo|floatformat:2 }}</b></dd>
-      <dt>Vence</dt><dd>{{ ap.vence|date:"d/m/Y" }}{% if ap.es_activo %} <span class="muted">({{ ap.dias_restantes }} día{{ ap.dias_restantes|pluralize }})</span>{% endif %}</dd>
+      <dt>Piezas</dt><dd>{{ ap.piezas }}{% if ap.por_encargo %} <span class="tag warn">{{ ap.por_encargo }} por encargo</span>{% endif %}</dd>
+      <dt>Total</dt><dd>${{ ap.total|floatformat:"2g" }}</dd>
+      <dt>Pagado</dt><dd>${{ ap.pagado|floatformat:"2g" }}</dd>
+      <dt>Saldo</dt><dd><b>${{ ap.saldo|floatformat:"2g" }}</b></dd>
+      <dt>Vence</dt><dd>{{ ap.vence|date:"d/m/Y" }}{% if ap.es_activo or ap.es_solicitud %} <span class="muted">({{ ap.dias_restantes }} día{{ ap.dias_restantes|pluralize }})</span>{% endif %}</dd>
       {% if ap.notas %}<dt>Notas</dt><dd>{{ ap.notas }}</dd>{% endif %}
       {% if ap.motivo_cancelacion %}<dt>Motivo de cancelación</dt><dd>{{ ap.motivo_cancelacion }}</dd>{% endif %}
     </dl>
   </div>
 
   <div class="card"><h2>Acciones</h2>
+    {% if ap.es_solicitud %}
+      <p class="muted small">El cliente pidió en línea. Al recibir su anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> se aparta el inventario.</p>
+      <form method="post" action="{% url 'tienda:apartado_confirmar' ap.pk %}">{% csrf_token %}
+        {% include "tienda/_form_fields.html" with form=confirmar_form %}
+        <button class="btn" type="submit">Confirmar con anticipo</button>
+      </form>
+      <hr>
+    {% endif %}
     {% if ap.es_activo %}
       <form method="post" action="{% url 'tienda:apartado_pago' ap.pk %}">{% csrf_token %}
         {% include "tienda/_form_fields.html" with form=pago_form %}
@@ -35,20 +43,32 @@
     {% if ap.puede_cancelarse %}
       <form method="post" action="{% url 'tienda:apartado_cancelar' ap.pk %}">{% csrf_token %}
         {% include "tienda/_form_fields.html" with form=cancelar_form %}
-        <button class="btn ghost" type="submit">Cancelar apartado</button>
+        <button class="btn ghost" type="submit">{% if ap.es_solicitud %}Rechazar solicitud{% else %}Cancelar pedido{% endif %}</button>
       </form>
     {% endif %}
-    {% if not ap.es_activo and not ap.puede_entregarse and not ap.puede_cancelarse %}<p class="muted">Este apartado ya no admite acciones.</p>{% endif %}
+    {% if not ap.es_solicitud and not ap.es_activo and not ap.puede_entregarse and not ap.puede_cancelarse %}<p class="muted">Este pedido ya no admite acciones.</p>{% endif %}
   </div>
 </div>
 
+<h2 style="margin-top:20px">Prendas del pedido</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>Prenda</th><th>Talla</th><th class="num">Precio</th><th class="num">Cantidad</th><th class="num">De inventario</th><th class="num">Por encargo</th><th class="num">Subtotal</th></tr></thead>
+  <tbody>{% for i in items %}<tr>
+    <td>{{ i.prenda.modelo }} <span class="muted small">· {{ i.prenda.color }}</span></td><td><b>{{ i.prenda.talla }}</b></td>
+    <td class="num">${{ i.precio_unitario|floatformat:"2g" }}</td><td class="num">{{ i.cantidad }}</td>
+    <td class="num">{% if ap.es_solicitud %}—{% else %}{{ i.de_inventario }}{% endif %}</td>
+    <td class="num">{% if ap.es_solicitud %}—{% else %}{{ i.por_encargo }}{% endif %}</td>
+    <td class="num">${{ i.subtotal|floatformat:"2g" }}</td></tr>{% endfor %}</tbody>
+  <tfoot><tr><td colspan="6" class="num">Total</td><td class="num"><b>${{ ap.total|floatformat:"2g" }}</b></td></tr></tfoot>
+</table></div>
+
 <div class="grid g2" style="margin-top:16px">
   <div class="card"><h2>Pagos</h2>
-    <ul class="avisos">{% for p in pagos %}<li>{{ p.fecha|date:"d/m/Y H:i" }} · {{ p.get_tipo_display }} · <b>${{ p.monto|floatformat:2 }}</b> <span class="muted">({{ p.get_metodo_display }} · {{ p.registrado_por.get_username }})</span></li>
+    <ul class="avisos">{% for p in pagos %}<li>{{ p.fecha|date:"d/m/Y H:i" }} · {{ p.get_tipo_display }} · <b>${{ p.monto|floatformat:"2g" }}</b> <span class="muted">({{ p.get_metodo_display }} · {{ p.registrado_por.get_username }})</span></li>
     {% empty %}<li class="muted">Sin pagos.</li>{% endfor %}</ul></div>
   <div class="card"><h2>Avisos al cliente</h2>
     <ul class="avisos">{% for a in avisos %}<li><span class="muted small">{{ a.fecha|date:"d/m/Y H:i" }} · {{ a.get_tipo_display }}</span><br>{{ a.mensaje }}</li>
     {% empty %}<li class="muted">Sin avisos.</li>{% endfor %}</ul></div>
 </div>
-<p><a href="{% url 'tienda:apartados' %}">← Volver a apartados</a></p>
+<p><a href="{% url 'tienda:apartados' %}">← Volver a pedidos</a></p>
 {% endblock %}

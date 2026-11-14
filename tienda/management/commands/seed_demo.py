@@ -12,21 +12,30 @@ from django.utils import timezone
 from tienda import services
 from tienda.models import Apartado, Cliente, Perfil, Prenda
 
-CATALOGO = [
-    # codigo, modelo, categoria, talla, color, precio, stock, minimo
-    ("ESC-CAM-CH", "Camisa escolar manga corta", "ESCOLAR", "CH", "Blanco", "185.00", 14, 4),
-    ("ESC-CAM-M", "Camisa escolar manga corta", "ESCOLAR", "M", "Blanco", "185.00", 9, 4),
-    ("ESC-CAM-G", "Camisa escolar manga corta", "ESCOLAR", "G", "Blanco", "195.00", 2, 4),
-    ("ESC-FAL-12", "Falda escolar plisada", "ESCOLAR", "12", "Azul marino", "260.00", 6, 3),
-    ("ESC-FAL-14", "Falda escolar plisada", "ESCOLAR", "14", "Azul marino", "270.00", 0, 3),
-    ("ESC-PAN-28", "Pantalón escolar", "ESCOLAR", "28", "Gris", "290.00", 8, 3),
-    ("ESC-PAN-30", "Pantalón escolar", "ESCOLAR", "30", "Gris", "300.00", 5, 3),
-    ("DEP-PLA-M", "Playera deportiva", "DEPORTIVO", "M", "Rojo", "150.00", 12, 5),
-    ("DEP-CHA-G", "Chamarra deportiva", "DEPORTIVO", "G", "Negro", "480.00", 3, 3),
-    ("EMP-CHA-M", "Chaleco empresarial", "EMPRESARIAL", "M", "Gris Oxford", "390.00", 4, 2),
-    ("MED-FIL-M", "Filipina médica", "MEDICO", "M", "Verde quirófano", "340.00", 7, 3),
-    ("MED-PAN-L", "Pantalón médico", "MEDICO", "L", "Verde quirófano", "320.00", 1, 3),
+TALLAS = ["XS", "CH", "M", "L", "XL", "XXL"]
+EXTRA = {"XL": 10, "XXL": 20}  # las tallas grandes cuestan un poco más
+
+# prefijo, modelo, categoría, color, precio base, stock por talla (XS, CH, M, L, XL, XXL)
+MODELOS = [
+    ("ESC-CAM", "Camisa escolar manga corta", "ESCOLAR", "Blanco", "185.00", [4, 14, 20, 15, 6, 2]),
+    ("ESC-FAL", "Falda escolar plisada", "ESCOLAR", "Azul marino", "260.00", [5, 10, 8, 6, 3, 0]),
+    ("ESC-PAN", "Pantalón escolar", "ESCOLAR", "Gris", "290.00", [3, 9, 12, 10, 5, 2]),
+    ("DEP-PLA", "Playera deportiva", "DEPORTIVO", "Rojo", "150.00", [6, 12, 18, 14, 8, 4]),
+    ("DEP-CHA", "Chamarra deportiva", "DEPORTIVO", "Negro", "480.00", [2, 5, 8, 6, 3, 0]),
+    ("EMP-CAM", "Camisa empresarial", "EMPRESARIAL", "Azul cielo", "320.00", [2, 6, 10, 9, 4, 2]),
+    ("EMP-CHA", "Chaleco empresarial", "EMPRESARIAL", "Gris Oxford", "390.00", [1, 4, 6, 5, 3, 1]),
+    ("MED-FIL", "Filipina médica", "MEDICO", "Verde quirófano", "340.00", [3, 8, 11, 9, 5, 2]),
+    ("MED-PAN", "Pantalón médico", "MEDICO", "Verde quirófano", "320.00", [0, 7, 10, 8, 4, 1]),
 ]
+
+
+def _prenda(prefijo, talla):
+    return Prenda.objects.get(codigo=f"{prefijo}-{talla}")
+
+
+def _anticipo(lineas):
+    total = sum(p.precio * c for p, c in lineas)
+    return (total / 2).quantize(Decimal("0.01"))
 
 
 class Command(BaseCommand):
@@ -49,11 +58,16 @@ class Command(BaseCommand):
         vendedor.save()
         Perfil.objects.update_or_create(usuario=vendedor, defaults={"rol": Perfil.VENDEDOR})
 
-        for cod, modelo, cat, talla, color, precio, stock, minimo in CATALOGO:
-            Prenda.objects.update_or_create(
-                codigo=cod,
-                defaults=dict(modelo=modelo, categoria=cat, talla=talla, color=color, precio=Decimal(precio), stock=stock, stock_minimo=minimo, activa=True),
-            )
+        # Quita prendas de versiones anteriores con tallas que ya no existen (si no tienen pedidos)
+        Prenda.objects.exclude(talla__in=TALLAS).filter(partidas__isnull=True).delete()
+
+        for prefijo, modelo, cat, color, precio, stocks in MODELOS:
+            for talla, stock in zip(TALLAS, stocks):
+                Prenda.objects.update_or_create(
+                    codigo=f"{prefijo}-{talla}",
+                    defaults=dict(modelo=modelo, categoria=cat, talla=talla, color=color,
+                                  precio=Decimal(precio) + EXTRA.get(talla, 0), stock=stock, stock_minimo=3, activa=True),
+                )
 
         if Apartado.objects.exists():
             self.stdout.write("Ya hay apartados; no se crean más de ejemplo.")
@@ -62,14 +76,28 @@ class Command(BaseCommand):
             c2 = Cliente.objects.get_or_create(telefono="7779876543", defaults={"nombre": "Carlos Ramírez Soto"})[0]
             c3 = Cliente.objects.get_or_create(telefono="7775551122", defaults={"nombre": "Ana Torres Vega"})[0]
 
-            a1 = services.crear_apartado(cliente=c1, prenda=Prenda.objects.get(codigo="ESC-CAM-M"), cantidad=2, anticipo=Decimal("185.00"), metodo="EFECTIVO", vendedor=vendedor)
+            def pedir(cliente, lineas, **kw):
+                lineas = [(_prenda(pre, t), c) for pre, t, c in lineas]
+                return services.crear_pedido(cliente=cliente, lineas=lineas, vendedor=vendedor, anticipo=_anticipo(lineas), metodo="EFECTIVO", **kw)
+
+            # Pedido con varias tallas: 2 M + 1 L + 1 XL de camisa escolar
+            a1 = pedir(c1, [("ESC-CAM", "M", 2), ("ESC-CAM", "L", 1), ("ESC-CAM", "XL", 1)])
             services.registrar_pago(apartado=a1, monto=Decimal("100.00"), metodo="EFECTIVO", usuario=vendedor)
-            a2 = services.crear_apartado(cliente=c2, prenda=Prenda.objects.get(codigo="ESC-PAN-30"), cantidad=1, anticipo=Decimal("300.00"), metodo="TARJETA", vendedor=vendedor)
-            a3 = services.crear_apartado(cliente=c3, prenda=Prenda.objects.get(codigo="ESC-FAL-14"), cantidad=1, anticipo=Decimal("135.00"), metodo="EFECTIVO", vendedor=vendedor, tipo=Apartado.ESPECIAL, notas="Pedido especial, talla agotada")
-            # Un apartado próximo a vencer para demostrar la alerta
-            a4 = services.crear_apartado(cliente=c2, prenda=Prenda.objects.get(codigo="DEP-PLA-M"), cantidad=3, anticipo=Decimal("225.00"), metodo="EFECTIVO", vendedor=vendedor)
+            # Pedido liquidado, listo para entregar
+            lin2 = [(_prenda("ESC-PAN", "M"), 1)]
+            a2 = services.crear_pedido(cliente=c2, lineas=lin2, vendedor=vendedor, anticipo=Decimal("290.00"), metodo="TARJETA")
+            # Talla agotada: la falda XXL se pide al proveedor
+            a3 = pedir(c3, [("ESC-FAL", "XXL", 2), ("ESC-FAL", "M", 1)], notas="Falda XXL por encargo")
+            # Un pedido próximo a vencer para demostrar la alerta
+            a4 = pedir(c2, [("DEP-PLA", "M", 3)])
             Apartado.objects.filter(pk=a4.pk).update(creado=timezone.now() - timedelta(days=27), vence=timezone.now() + timedelta(days=3))
-            self.stdout.write(f"Apartados de ejemplo: {a1.folio}, {a2.folio}, {a3.folio}, {a4.folio}")
+            # Solicitud hecha por el propio cliente en línea (pedido grande, varias tallas)
+            escuela = Cliente.objects.get_or_create(telefono="7775559900", defaults={"nombre": "Escuela Primaria Benito Juárez"})[0]
+            a5 = services.crear_pedido(
+                cliente=escuela, notas="Uniformes para el ciclo escolar",
+                lineas=[(_prenda("ESC-CAM", "CH"), 20), (_prenda("ESC-CAM", "M"), 30), (_prenda("ESC-CAM", "L"), 200), (_prenda("ESC-CAM", "XXL"), 3)],
+            )
+            self.stdout.write(f"Pedidos de ejemplo: {a1.folio}, {a2.folio}, {a3.folio}, {a4.folio} y la solicitud en línea {a5.folio} (teléfono 7775559900)")
 
         self.stdout.write(self.style.SUCCESS("Datos demo listos."))
         self.stdout.write(f"  gerente  → contraseña: {pw_gerente}")

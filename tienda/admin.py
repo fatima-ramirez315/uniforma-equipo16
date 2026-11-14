@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Apartado, Cliente, EntradaMercancia, Notificacion, Pago, Perfil, Prenda
+from .models import Apartado, ApartadoItem, Cliente, EntradaMercancia, Notificacion, Pago, Perfil, Prenda
 
 
 @admin.register(Perfil)
@@ -26,12 +26,17 @@ class PagoInline(admin.TabularInline):
     extra = 0
 
 
+class ItemInline(admin.TabularInline):
+    model = ApartadoItem
+    extra = 0
+
+
 @admin.register(Apartado)
 class ApartadoAdmin(admin.ModelAdmin):
-    list_display = ("folio", "cliente", "prenda", "tipo", "estado", "total", "vence")
-    list_filter = ("estado", "tipo")
+    list_display = ("folio", "cliente", "origen", "estado", "total", "vence")
+    list_filter = ("estado", "origen")
     search_fields = ("folio", "cliente__nombre")
-    inlines = [PagoInline]
+    inlines = [ItemInline, PagoInline]
 
 
 admin.site.register(Notificacion)

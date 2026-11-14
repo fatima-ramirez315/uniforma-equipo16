@@ -4,16 +4,17 @@
 <div class="head">
   <div><h1>Panel de control</h1><p class="muted">Hola, {{ user.get_username }}. Resumen del día.</p></div>
   <div class="actions">
-    <a class="btn" href="{% url 'tienda:apartado_nuevo' %}">+ Nuevo apartado</a>
+    <a class="btn" href="{% url 'tienda:apartado_nuevo' %}">+ Nuevo pedido en mostrador</a>
     {% if es_gerente %}<form method="post" action="{% url 'tienda:procesar_vencimientos' %}" style="margin:0">{% csrf_token %}<button class="btn ghost" type="submit">Revisar vencimientos</button></form>{% endif %}
   </div>
 </div>
 
-<div class="grid g4">
+<div class="grid g5">
+  <a class="card stat" href="{% url 'tienda:apartados' %}?estado=SOLICITADO"><div class="n">{{ n_solicitudes }}</div><div class="l">Solicitudes en línea por confirmar</div></a>
   <a class="card stat" href="{% url 'tienda:apartados' %}?estado=ACTIVO"><div class="n">{{ n_activos }}</div><div class="l">Apartados con saldo</div></a>
   <a class="card stat" href="{% url 'tienda:apartados' %}?estado=PAGADO"><div class="n">{{ n_listos }}</div><div class="l">Listos para entregar</div></a>
   <div class="card stat"><div class="n">{{ n_por_vencer }}</div><div class="l">Vencen en 5 días o menos</div></div>
-  <div class="card stat"><div class="n">${{ saldo_pendiente|floatformat:0 }}</div><div class="l">Saldo por cobrar</div></div>
+  <div class="card stat"><div class="n">${{ saldo_pendiente|floatformat:"0g" }}</div><div class="l">Saldo por cobrar</div></div>
 </div>
 
 <div class="grid g2" style="margin-top:16px">
@@ -27,12 +28,12 @@
     <p style="margin-bottom:0"><a href="{% url 'tienda:notificaciones' %}">Ver avisos →</a></p></div>
 </div>
 
-<h2 style="margin-top:24px">Últimos apartados</h2>
+<h2 style="margin-top:24px">Últimos pedidos</h2>
 <div class="tablewrap"><table>
-  <thead><tr><th>Folio</th><th>Cliente</th><th>Prenda</th><th>Estado</th><th class="num">Saldo</th></tr></thead>
+  <thead><tr><th>Folio</th><th>Cliente</th><th class="num">Piezas</th><th>Estado</th><th class="num">Saldo</th></tr></thead>
   <tbody>{% for a in ultimos %}<tr>
-    <td><a href="{% url 'tienda:apartado_detalle' a.pk %}">{{ a.folio }}</a></td><td>{{ a.cliente.nombre }}</td><td>{{ a.prenda }}</td>
-    <td><span class="tag">{{ a.get_estado_display }}</span></td><td class="num">${{ a.saldo|floatformat:2 }}</td></tr>
+    <td><a href="{% url 'tienda:apartado_detalle' a.pk %}">{{ a.folio }}</a></td><td>{{ a.cliente.nombre }}</td><td class="num">{{ a.n_piezas }}</td>
+    <td><span class="tag">{{ a.get_estado_display }}</span></td><td class="num">${{ a.saldo|floatformat:"2g" }}</td></tr>
   {% empty %}<tr><td colspan="5" class="muted">Aún no hay apartados.</td></tr>{% endfor %}</tbody>
 </table></div>
 {% endblock %}

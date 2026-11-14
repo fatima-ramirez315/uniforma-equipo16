@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Pedido enviado{% endblock %}
+{% block content %}
+<div class="card" style="max-width:720px;margin:0 auto">
+  <span class="tag ok">Pedido recibido</span>
+  <h1 style="margin-top:10px">¡Listo! Tu folio es {{ ap.folio }}</h1>
+  <p>Guárdalo: con tu folio y tu teléfono (<b>{{ telefono }}</b>) puedes ver el estado de tu pedido en cualquier momento.</p>
+  <div class="tablewrap" style="margin:14px 0"><table>
+    <thead><tr><th>Prenda</th><th>Talla</th><th class="num">Cantidad</th><th class="num">Subtotal</th></tr></thead>
+    <tbody>{% for i in ap.items.all %}<tr><td>{{ i.prenda.modelo }} <span class="muted small">· {{ i.prenda.color }}</span></td><td>{{ i.prenda.talla }}</td><td class="num">{{ i.cantidad }}</td><td class="num">${{ i.subtotal|floatformat:"2g" }}</td></tr>{% endfor %}</tbody>
+    <tfoot><tr><td colspan="3" class="num">Total</td><td class="num"><b>${{ ap.total|floatformat:"2g" }}</b></td></tr></tfoot>
+  </table></div>
+  <div class="card" style="background:var(--warn-l);border-color:var(--warn)">
+    <b>Siguiente paso:</b> acude a mostrador con tu anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> (50&nbsp;%) antes del <b>{{ ap.vence|date:"d/m/Y" }}</b> para apartar tus prendas.
+  </div>
+  <div class="actions" style="margin-top:16px">
+    <a class="btn" href="{% url 'tienda:seguimiento' %}?folio={{ ap.folio }}&telefono={{ telefono }}">Ver el estado de mi pedido</a>
+    <a class="btn ghost" href="{% url 'tienda:catalogo' %}">Volver al catálogo</a>
+  </div>
+</div>
+{% endblock %}

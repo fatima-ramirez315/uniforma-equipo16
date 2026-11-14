@@ -2,41 +2,98 @@
 {% block title %}Catálogo{% endblock %}
 {% block content %}
 <div class="head">
-  <div><h1>Catálogo de uniformes</h1><p class="muted">Consulta modelos, tallas y existencias en tiempo real. Para apartar, acude a mostrador con tu anticipo del 50&nbsp;%.</p></div>
+  <div><h1>Catálogo de uniformes</h1>
+    <p class="muted">Elige categoría, modelo y talla; escribe cuántas piezas quieres de cada talla y agrégalas a tu pedido.
+    {% if es_personal %}<b>Modo mostrador:</b> el pedido se registra con el anticipo del cliente.{% else %}Tu pedido queda registrado y se aparta al pagar el anticipo del 50&nbsp;% en tienda.{% endif %}</p></div>
+  <a class="btn {% if not en_carrito %}ghost{% endif %}" href="{% url 'tienda:carrito' %}">Mi pedido{% if en_carrito %} · {{ en_carrito }} pza{{ en_carrito|pluralize }}{% endif %}</a>
 </div>
 
-<form method="get" class="filters card">
-  <div class="field"><label for="q">Buscar</label><input class="input" id="q" name="q" value="{{ q }}" placeholder="Modelo, color o código"></div>
+<form method="get" class="filters card" id="filtros">
   <div class="field"><label for="categoria">Categoría</label>
     <select class="input" id="categoria" name="categoria"><option value="">Todas</option>
       {% for v, n in categorias %}<option value="{{ v }}" {% if v == categoria %}selected{% endif %}>{{ n }}</option>{% endfor %}
     </select></div>
+  <div class="field"><label for="modelo">Modelo</label>
+    <select class="input" id="modelo" name="modelo"><option value="">Todos</option>
+      {% for m in modelos %}<option value="{{ m }}" {% if m == modelo %}selected{% endif %}>{{ m }}</option>{% endfor %}
+    </select></div>
   <div class="field"><label for="talla">Talla</label>
     <select class="input" id="talla" name="talla"><option value="">Todas</option>
-      {% for t in tallas %}<option value="{{ t }}" {% if t == talla %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      {% for t, n in tallas %}<option value="{{ t }}" {% if t == talla %}selected{% endif %}>{{ n }}</option>{% endfor %}
     </select></div>
+  <div class="field"><label for="q">Buscar</label><input class="input" id="q" name="q" value="{{ q }}" placeholder="Color o código"></div>
   <div class="field"><label><input class="check" type="checkbox" name="disponibles" value="1" {% if solo_disp %}checked{% endif %}> Solo con existencia</label></div>
   <button class="btn" type="submit">Filtrar</button>
   <a class="btn ghost" href="{% url 'tienda:catalogo' %}">Limpiar</a>
 </form>
 
-{% if prendas %}
-<div class="grid g3">
-  {% for p in prendas %}
-  <article class="card prenda">
-    <div class="sw"></div>
-    <span class="muted small">{{ p.get_categoria_display }} · {{ p.codigo }}</span>
-    <strong>{{ p.modelo }}</strong>
-    <span>Talla <b>{{ p.talla }}</b> · {{ p.color }}</span>
-    <span class="precio">${{ p.precio|floatformat:2 }}</span>
-    {% if p.stock == 0 %}<span class="tag bad">Agotado · disponible por pedido especial</span>
-    {% elif p.stock <= p.stock_minimo %}<span class="tag warn">Últimas {{ p.stock }} pieza{{ p.stock|pluralize }}</span>
-    {% else %}<span class="tag ok">Disponible · {{ p.stock }} pzas</span>{% endif %}
-    {% if es_personal %}<a class="btn sm ghost" href="{% url 'tienda:apartado_nuevo' %}?prenda={{ p.pk }}{% if p.stock == 0 %}&tipo=ESPECIAL{% endif %}">{% if p.stock == 0 %}Pedido especial{% else %}Apartar{% endif %}</a>{% endif %}
-  </article>
-  {% endfor %}
-</div>
-{% else %}
-<div class="card empty">No encontramos prendas con esos filtros.</div>
-{% endif %}
+{% for g in grupos %}
+<article class="card modelo">
+  <div class="mhead">
+    <div><span class="muted small">{{ g.categoria }}</span><h2>{{ g.modelo }}</h2><span class="muted">Color: <b>{{ g.color }}</b></span></div>
+    <div class="right"><span class="muted small">desde</span><div class="precio">${{ g.desde|floatformat:"2g" }}</div></div>
+  </div>
+  <form method="post" action="{% url 'tienda:carrito_agregar' %}">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <div class="tablewrap"><table class="tallas">
+      <thead><tr><th>Talla</th><th class="num">Precio</th><th>Existencia</th><th class="num">¿Cuántas?</th></tr></thead>
+      <tbody>{% for p in g.prendas %}<tr>
+        <td><b>{{ p.talla }}</b> <span class="muted small">{{ p.talla_nombre }}</span></td>
+        <td class="num">${{ p.precio|floatformat:"2g" }}</td>
+        <td>{% if p.stock == 0 %}<span class="tag bad">Agotada · por encargo</span>
+            {% elif p.stock <= p.stock_minimo %}<span class="tag warn">Últimas {{ p.stock }}</span>
+            {% else %}<span class="tag ok">{{ p.stock }} pzas</span>{% endif %}</td>
+        <td class="num"><input class="input qty" type="number" min="0" step="1" inputmode="numeric" name="cant_{{ p.pk }}" data-stock="{{ p.stock }}" placeholder="0" aria-label="Cantidad talla {{ p.talla }}">
+            <div class="enc small muted"></div></td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    <div class="actions" style="margin-top:12px"><button class="btn" type="submit">Agregar al pedido</button>
+      <span class="muted small" style="align-self:center">Puedes pedir varias tallas a la vez. Lo que exceda las existencias se pide al proveedor.</span></div>
+  </form>
+</article>
+{% empty %}
+<div class="card empty">No hay prendas con esa combinación. Cambia la talla o el modelo, o pulsa «Limpiar».</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+{{ mapa|json_script:"mapa" }}
+<script>
+(function () {
+  var mapa = JSON.parse(document.getElementById("mapa").textContent);
+  var form = document.getElementById("filtros");
+  var cat = document.getElementById("categoria"), mod = document.getElementById("modelo"), tal = document.getElementById("talla");
+  var nombres = {XS: "XS · Extra chica", CH: "CH · Chica", M: "M · Mediana", L: "L · Grande", XL: "XL · Extra grande", XXL: "XXL · Doble extra grande"};
+  function llenar(sel, valores, etiqueta, actual) {
+    sel.innerHTML = "";
+    var o = document.createElement("option"); o.value = ""; o.textContent = etiqueta; sel.appendChild(o);
+    valores.forEach(function (v) { var x = document.createElement("option"); x.value = v[0]; x.textContent = v[1]; if (v[0] === actual) x.selected = true; sel.appendChild(x); });
+  }
+  function modelosDe(c) {
+    var s = {}; Object.keys(mapa).forEach(function (k) { if (!c || k === c) Object.keys(mapa[k]).forEach(function (m) { s[m] = 1; }); });
+    return Object.keys(s).sort();
+  }
+  function tallasDe(c, m) {
+    var s = {}; Object.keys(mapa).forEach(function (k) { if (!c || k === c) Object.keys(mapa[k]).forEach(function (mm) { if (!m || mm === m) mapa[k][mm].forEach(function (t) { s[t] = 1; }); }); });
+    return Object.keys(nombres).filter(function (t) { return s[t]; });
+  }
+  cat.addEventListener("change", function () {
+    llenar(mod, modelosDe(cat.value).map(function (m) { return [m, m]; }), "Todos", "");
+    llenar(tal, tallasDe(cat.value, "").map(function (t) { return [t, nombres[t]]; }), "Todas", "");
+    form.submit();
+  });
+  mod.addEventListener("change", function () {
+    llenar(tal, tallasDe(cat.value, mod.value).map(function (t) { return [t, nombres[t]]; }), "Todas", "");
+    form.submit();
+  });
+  tal.addEventListener("change", function () { form.submit(); });
+
+  document.querySelectorAll("input.qty").forEach(function (inp) {
+    inp.addEventListener("input", function () {
+      var n = parseInt(inp.value, 10) || 0, st = parseInt(inp.dataset.stock, 10), out = inp.parentNode.querySelector(".enc");
+      out.textContent = n > st ? (st > 0 ? st + " de existencia + " + (n - st) + " por encargo" : n + " por encargo") : "";
+    });
+  });
+})();
+</script>
 {% endblock %}

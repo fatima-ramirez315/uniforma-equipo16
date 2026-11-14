@@ -3,7 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
-from .models import Apartado, Cliente, Pago, Prenda
+from .models import Cliente, Pago, Prenda
 
 
 class StyledMixin:
@@ -64,25 +64,38 @@ class ClienteForm(StyledMixin, forms.ModelForm):
         self._style()
 
 
-class ApartadoForm(StyledMixin, forms.Form):
-    nombre = forms.CharField(label="Nombre del cliente", max_length=120)
-    telefono = forms.RegexField(r"^\d{10}$", label="Teléfono (10 dígitos)", error_messages={"invalid": "El teléfono debe tener 10 dígitos."})
+class PedidoClienteForm(StyledMixin, forms.Form):
+    """Datos de quien hace el pedido (cliente en línea o cliente en mostrador)."""
+
+    nombre = forms.CharField(label="Nombre completo", max_length=120)
+    telefono = forms.RegexField(r"^\d{10}$", label="Teléfono (10 dígitos)", error_messages={"invalid": "El teléfono debe tener 10 dígitos."},
+                                widget=forms.TextInput(attrs={"inputmode": "numeric", "placeholder": "7771234567"}))
     email = forms.EmailField(label="Correo (opcional)", required=False)
-    prenda = forms.ModelChoiceField(queryset=Prenda.objects.none(), label="Prenda")
-    cantidad = forms.IntegerField(label="Cantidad", min_value=1, initial=1)
-    tipo = forms.ChoiceField(label="Tipo", choices=Apartado.TIPOS, initial=Apartado.INVENTARIO)
-    anticipo = forms.DecimalField(label="Anticipo recibido ($)", min_value=Decimal("0.01"), decimal_places=2, max_digits=10)
-    metodo = forms.ChoiceField(label="Forma de pago", choices=Pago.METODOS)
-    notas = forms.CharField(label="Notas", max_length=255, required=False)
+    notas = forms.CharField(label="Notas para la tienda (escuela, empresa, fecha que lo necesitas…)", max_length=255, required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["prenda"].queryset = Prenda.objects.filter(activa=True)
+        self._style()
+
+
+class PedidoMostradorForm(PedidoClienteForm):
+    """Lo mismo, más el anticipo que recibe el vendedor."""
+
+    anticipo = forms.DecimalField(label="Anticipo recibido ($)", min_value=Decimal("0.01"), decimal_places=2, max_digits=12)
+    metodo = forms.ChoiceField(label="Forma de pago", choices=Pago.METODOS)
+
+
+class ConfirmarForm(StyledMixin, forms.Form):
+    anticipo = forms.DecimalField(label="Anticipo recibido ($)", min_value=Decimal("0.01"), decimal_places=2, max_digits=12)
+    metodo = forms.ChoiceField(label="Forma de pago", choices=Pago.METODOS)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._style()
 
 
 class PagoForm(StyledMixin, forms.Form):
-    monto = forms.DecimalField(label="Monto ($)", min_value=Decimal("0.01"), decimal_places=2, max_digits=10)
+    monto = forms.DecimalField(label="Monto ($)", min_value=Decimal("0.01"), decimal_places=2, max_digits=12)
     metodo = forms.ChoiceField(label="Forma de pago", choices=Pago.METODOS)
 
     def __init__(self, *args, **kwargs):

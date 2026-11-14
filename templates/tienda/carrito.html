@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Mi pedido{% endblock %}
+{% block content %}
+<div class="head"><div><h1>Mi pedido</h1>
+  <p class="muted">Revisa las cantidades por talla. Puedes cambiarlas o quitar una prenda poniendo 0.</p></div>
+  <a class="btn ghost" href="{% url 'tienda:catalogo' %}">← Seguir agregando prendas</a></div>
+
+{% if not lineas %}
+  <div class="card empty">Tu pedido está vacío. <a href="{% url 'tienda:catalogo' %}">Ir al catálogo</a></div>
+{% else %}
+<form method="post" id="pedido" data-pct="50">{% csrf_token %}
+  <button type="submit" name="accion" value="pedir" class="sr" tabindex="-1" aria-hidden="true">Enviar pedido</button>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Prenda</th><th>Talla</th><th class="num">Precio</th><th class="num">Cantidad</th><th>Disponibilidad</th><th class="num">Subtotal</th></tr></thead>
+    <tbody>{% for l in lineas %}<tr>
+      <td>{{ l.prenda.modelo }} <span class="muted small">· {{ l.prenda.color }}</span></td>
+      <td><b>{{ l.prenda.talla }}</b></td>
+      <td class="num">${{ l.prenda.precio|floatformat:"2g" }}</td>
+      <td class="num"><input class="input qty" type="number" min="0" step="1" name="cant_{{ l.prenda.pk }}" value="{{ l.cantidad }}" data-precio="{{ l.prenda.precio }}" data-stock="{{ l.prenda.stock }}" aria-label="Cantidad"></td>
+      <td>{% if l.por_encargo %}{% if l.de_inventario %}<span class="tag warn">{{ l.de_inventario }} en tienda + {{ l.por_encargo }} por encargo</span>{% else %}<span class="tag warn">{{ l.por_encargo }} por encargo</span>{% endif %}
+          {% else %}<span class="tag ok">Todo en existencia</span>{% endif %}</td>
+      <td class="num">${{ l.subtotal|floatformat:"2g" }}</td>
+    </tr>{% endfor %}</tbody>
+    <tfoot><tr><td colspan="3"><b>{{ piezas }} pieza{{ piezas|pluralize }}</b></td><td colspan="2" class="num">Total</td><td class="num"><b id="t-total">${{ total|floatformat:"2g" }}</b></td></tr>
+      <tr><td colspan="5" class="num muted">Anticipo mínimo ({{ 50 }} %)</td><td class="num"><b id="t-min">${{ minimo|floatformat:"2g" }}</b></td></tr></tfoot>
+  </table></div>
+  <div class="actions" style="margin:12px 0 22px">
+    <button class="btn ghost" type="submit" name="accion" value="actualizar">Actualizar cantidades</button>
+    <button class="btn ghost" type="submit" name="accion" value="vaciar">Vaciar pedido</button>
+  </div>
+  {% if encargo %}<p class="msgs"><span class="tag warn">Aviso</span> {{ encargo }} pieza{{ encargo|pluralize }} no están en existencia y se pedirán al proveedor; te avisaremos cuando lleguen.</p>{% endif %}
+
+  <div class="card" style="max-width:640px">
+    <h2>{% if personal %}Datos del cliente y anticipo{% else %}Tus datos{% endif %}</h2>
+    {% include "tienda/_form_fields.html" %}
+    {% if not personal %}<p class="muted small">Al enviar el pedido se genera tu folio. Para apartarlo, acude a mostrador con tu anticipo mínimo del 50&nbsp;%. Sin anticipo la solicitud caduca a los 7 días.</p>{% endif %}
+    <button class="btn" type="submit" name="accion" value="pedir">{% if personal %}Registrar pedido con anticipo{% else %}Enviar mi pedido{% endif %}</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var f = document.getElementById("pedido"); if (!f) return;
+  var qs = f.querySelectorAll("input.qty"), tt = document.getElementById("t-total"), tm = document.getElementById("t-min"), ant = document.getElementById("id_anticipo");
+  var tocado = false; if (ant) ant.addEventListener("input", function () { tocado = true; });
+  function money(n) { return "$" + n.toFixed(2); }
+  function calc() {
+    var t = 0; qs.forEach(function (q) { t += (parseFloat(q.dataset.precio) || 0) * (parseInt(q.value, 10) || 0); });
+    tt.textContent = money(t); tm.textContent = money(t / 2);
+    if (ant && !tocado) ant.value = (t / 2).toFixed(2);
+  }
+  qs.forEach(function (q) { q.addEventListener("input", calc); });
+})();
+</script>
+{% endblock %}

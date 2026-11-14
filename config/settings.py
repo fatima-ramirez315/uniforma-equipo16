@@ -116,4 +116,5 @@ LOGOUT_REDIRECT_URL = "tienda:catalogo"
 # Reglas de negocio (RN) del caso Uniforma
 ANTICIPO_PORCENTAJE = 50   # RN-01: anticipo mínimo del 50 % para apartar
 VIGENCIA_APARTADO_DIAS = 30  # Un apartado vence a los 30 días
+SOLICITUD_VIGENCIA_DIAS = 7  # Una solicitud en línea sin anticipo caduca a los 7 días
 AVISO_VENCIMIENTO_DIAS = 5   # Se avisa al cliente N días antes de vencer

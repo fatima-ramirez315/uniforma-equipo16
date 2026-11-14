@@ -51,10 +51,20 @@ class Prenda(models.Model):
         ("OTRO", "Otro"),
     ]
 
+    TALLAS = [
+        ("XS", "XS · Extra chica"),
+        ("CH", "CH · Chica"),
+        ("M", "M · Mediana"),
+        ("L", "L · Grande"),
+        ("XL", "XL · Extra grande"),
+        ("XXL", "XXL · Doble extra grande"),
+    ]
+    ORDEN_TALLAS = [t for t, _ in TALLAS]
+
     codigo = models.CharField(max_length=20, unique=True)
     modelo = models.CharField(max_length=120)
     categoria = models.CharField(max_length=12, choices=CATEGORIAS, default="ESCOLAR")
-    talla = models.CharField(max_length=6)
+    talla = models.CharField(max_length=6, choices=TALLAS)
     color = models.CharField(max_length=40)
     precio = models.DecimalField(max_digits=9, decimal_places=2, validators=[MinValueValidator(Decimal("0.01"))])
     stock = models.PositiveIntegerField(default=0)
@@ -62,7 +72,7 @@ class Prenda(models.Model):
     activa = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ["modelo", "talla"]
+        ordering = ["modelo", "color"]
         constraints = [
             models.UniqueConstraint(fields=["modelo", "talla", "color"], name="prenda_modelo_talla_color_unica"),
         ]
@@ -78,16 +88,27 @@ class Prenda(models.Model):
     def stock_bajo(self):
         return self.activa and self.stock <= self.stock_minimo
 
+    @property
+    def talla_nombre(self):
+        """«Extra chica», «Mediana»… (sin la abreviatura)."""
+        return self.get_talla_display().split(" · ")[-1]
+
+    @property
+    def orden_talla(self):
+        return self.ORDEN_TALLAS.index(self.talla) if self.talla in self.ORDEN_TALLAS else 99
+
 
 class Apartado(models.Model):
-    """RF-02, RF-05, RF-06, RF-08. Un apartado (o pedido especial) de una prenda."""
+    """RF-02, RF-05, RF-06, RF-08. Un pedido: varias prendas/tallas, pedido por el cliente o en mostrador."""
 
+    SOLICITADO = "SOLICITADO"
     ACTIVO = "ACTIVO"
     PAGADO = "PAGADO"
     ENTREGADO = "ENTREGADO"
     CANCELADO = "CANCELADO"
     VENCIDO = "VENCIDO"
     ESTADOS = [
+        (SOLICITADO, "Solicitud en línea (falta anticipo)"),
         (ACTIVO, "Activo (con saldo pendiente)"),
         (PAGADO, "Liquidado (listo para entregar)"),
         (ENTREGADO, "Entregado"),
@@ -95,20 +116,18 @@ class Apartado(models.Model):
         (VENCIDO, "Vencido"),
     ]
 
-    INVENTARIO = "INVENTARIO"
-    ESPECIAL = "ESPECIAL"
-    TIPOS = [(INVENTARIO, "Apartado de inventario"), (ESPECIAL, "Pedido especial")]
+    MOSTRADOR = "MOSTRADOR"
+    EN_LINEA = "EN_LINEA"
+    ORIGENES = [(MOSTRADOR, "Mostrador"), (EN_LINEA, "En línea (cliente)")]
 
     folio = models.CharField(max_length=12, unique=True, editable=False, blank=True)
     cliente = models.ForeignKey(Cliente, on_delete=models.PROTECT, related_name="apartados")
-    prenda = models.ForeignKey(Prenda, on_delete=models.PROTECT, related_name="apartados")
-    cantidad = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
-    tipo = models.CharField(max_length=10, choices=TIPOS, default=INVENTARIO)
+    origen = models.CharField(max_length=10, choices=ORIGENES, default=MOSTRADOR)
     estado = models.CharField(max_length=10, choices=ESTADOS, default=ACTIVO, db_index=True)
-    total = models.DecimalField(max_digits=10, decimal_places=2)
+    total = models.DecimalField(max_digits=12, decimal_places=2)
     creado = models.DateTimeField(default=timezone.now)
     vence = models.DateTimeField()
-    vendedor = models.ForeignKey(User, on_delete=models.PROTECT, related_name="apartados_registrados")
+    vendedor = models.ForeignKey(User, on_delete=models.PROTECT, related_name="apartados_registrados", null=True, blank=True)
     notas = models.CharField(max_length=255, blank=True)
     motivo_cancelacion = models.CharField(max_length=255, blank=True)
     aviso_vencimiento_enviado = models.BooleanField(default=False)
@@ -139,8 +158,25 @@ class Apartado(models.Model):
         return (self.total * Decimal(settings.ANTICIPO_PORCENTAJE) / Decimal(100)).quantize(Decimal("0.01"))
 
     @property
+    def piezas(self):
+        return sum(i.cantidad for i in self.items.all())
+
+    @property
+    def por_encargo(self):
+        return sum(i.por_encargo for i in self.items.all())
+
+    @property
+    def resumen(self):
+        n = self.items.count()
+        return f"{self.piezas} pieza(s) en {n} partida(s)"
+
+    @property
     def dias_restantes(self):
         return (self.vence - timezone.now()).days
+
+    @property
+    def es_solicitud(self):
+        return self.estado == self.SOLICITADO
 
     @property
     def es_activo(self):
@@ -148,11 +184,40 @@ class Apartado(models.Model):
 
     @property
     def puede_cancelarse(self):
-        return self.estado in (self.ACTIVO, self.PAGADO)
+        return self.estado in (self.SOLICITADO, self.ACTIVO, self.PAGADO)
 
     @property
     def puede_entregarse(self):
         return self.estado == self.PAGADO
+
+
+class ApartadoItem(models.Model):
+    """Una partida del pedido: una prenda en una talla, con su cantidad.
+
+    ``de_inventario`` son las piezas que se apartaron del stock; el resto
+    (``por_encargo``) se pide al proveedor (pedidos grandes o tallas agotadas).
+    """
+
+    apartado = models.ForeignKey(Apartado, on_delete=models.CASCADE, related_name="items")
+    prenda = models.ForeignKey(Prenda, on_delete=models.PROTECT, related_name="partidas")
+    cantidad = models.PositiveIntegerField(validators=[MinValueValidator(1)])
+    de_inventario = models.PositiveIntegerField(default=0)
+    precio_unitario = models.DecimalField(max_digits=9, decimal_places=2)
+
+    class Meta:
+        ordering = ["prenda__modelo", "prenda__color", "id"]
+        constraints = [models.UniqueConstraint(fields=["apartado", "prenda"], name="partida_unica_por_prenda")]
+
+    def __str__(self):
+        return f"{self.cantidad} x {self.prenda}"
+
+    @property
+    def por_encargo(self):
+        return self.cantidad - self.de_inventario
+
+    @property
+    def subtotal(self):
+        return self.precio_unitario * self.cantidad
 
 
 class Pago(models.Model):
@@ -191,6 +256,7 @@ class Notificacion(models.Model):
         ("CANCELADO", "Apartado cancelado"),
         ("ENTREGADO", "Entrega realizada"),
         ("LLEGO_PEDIDO", "Llegó pedido especial"),
+        ("SOLICITUD", "Solicitud recibida"),
     ]
 
     apartado = models.ForeignKey(Apartado, on_delete=models.CASCADE, related_name="notificaciones")

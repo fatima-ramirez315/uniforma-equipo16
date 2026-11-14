@@ -2,15 +2,20 @@
 Reglas de negocio de Uniforma. Toda la lógica que modifica inventario, pagos y
 estados vive aquí, dentro de transacciones, para que las vistas sean delgadas
 y las pruebas sencillas.
+
+Un pedido (Apartado) tiene varias partidas (ApartadoItem): una prenda en una
+talla con su cantidad. Al confirmarse con el anticipo, cada partida aparta del
+inventario lo que haya; lo que falte queda "por encargo" al proveedor.
 """
 from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
-from .models import Apartado, Cliente, EntradaMercancia, Notificacion, Pago, Prenda
+from .models import Apartado, ApartadoItem, Cliente, EntradaMercancia, Notificacion, Pago, Prenda
 
 
 class ReglaDeNegocioError(Exception):
@@ -19,7 +24,7 @@ class ReglaDeNegocioError(Exception):
 
 def _aviso(apartado, tipo, mensaje):
     return Notificacion.objects.create(
-        apartado=apartado, cliente=apartado.cliente, tipo=tipo, mensaje=mensaje
+        apartado=apartado, cliente=apartado.cliente, tipo=tipo, mensaje=mensaje[:300]
     )
 
 
@@ -27,70 +32,118 @@ def _dinero(valor):
     return Decimal(valor).quantize(Decimal("0.01"))
 
 
+def _minimo(total):
+    return _dinero(total * Decimal(settings.ANTICIPO_PORCENTAJE) / Decimal(100))
+
+
+def normalizar_lineas(lineas):
+    """Junta partidas repetidas y descarta cantidades en cero. ``lineas``: iterable de (prenda, cantidad)."""
+    acumulado = {}
+    for prenda, cantidad in lineas:
+        cantidad = int(cantidad or 0)
+        if cantidad < 0:
+            raise ReglaDeNegocioError("Las cantidades no pueden ser negativas.")
+        if cantidad:
+            acumulado[prenda.pk] = acumulado.get(prenda.pk, 0) + cantidad
+    if not acumulado:
+        raise ReglaDeNegocioError("Agrega al menos una prenda al pedido.")
+    prendas = {p.pk: p for p in Prenda.objects.filter(pk__in=acumulado)}
+    return [(prendas[pk], c) for pk, c in acumulado.items()]
+
+
 # --------------------------------------------------------------------------
-# RF-02 / RF-08 / RF-09: registrar apartado o pedido especial
+# RF-02 / RF-08 / RF-09: crear pedido (solicitud del cliente o apartado en mostrador)
 # --------------------------------------------------------------------------
 @transaction.atomic
-def crear_apartado(*, cliente, prenda, cantidad, anticipo, metodo, vendedor, tipo=Apartado.INVENTARIO, notas=""):
-    prenda = Prenda.objects.select_for_update().get(pk=prenda.pk)
-    cantidad = int(cantidad)
+def crear_pedido(*, cliente, lineas, vendedor=None, anticipo=None, metodo="EFECTIVO", notas=""):
+    """Crea un pedido con varias partidas.
+
+    - Sin ``vendedor``/``anticipo``: es una *solicitud en línea* del cliente (no mueve inventario).
+    - Con ``vendedor`` y ``anticipo``: apartado de mostrador, ya confirmado.
+    """
+    lineas = normalizar_lineas(lineas)
+    for prenda, _ in lineas:
+        if not prenda.activa:
+            raise ReglaDeNegocioError(f"«{prenda}» está dada de baja del catálogo.")
+    total = _dinero(sum(p.precio * c for p, c in lineas))
+
+    en_mostrador = vendedor is not None
+    ahora = timezone.now()
+    dias = settings.VIGENCIA_APARTADO_DIAS if en_mostrador else settings.SOLICITUD_VIGENCIA_DIAS
+    ap = Apartado.objects.create(
+        cliente=cliente,
+        origen=Apartado.MOSTRADOR if en_mostrador else Apartado.EN_LINEA,
+        estado=Apartado.SOLICITADO,
+        total=total,
+        vence=ahora + timedelta(days=dias),
+        vendedor=vendedor,
+        notas=notas,
+    )
+    for prenda, cantidad in lineas:
+        ApartadoItem.objects.create(apartado=ap, prenda=prenda, cantidad=cantidad, precio_unitario=prenda.precio)
+
+    if en_mostrador:
+        if anticipo is None:
+            raise ReglaDeNegocioError("Indica el anticipo recibido.")
+        return confirmar_solicitud(apartado=ap, anticipo=anticipo, metodo=metodo, usuario=vendedor)
+
+    _aviso(
+        ap,
+        "SOLICITUD",
+        f"Recibimos tu pedido {ap.folio} ({ap.resumen}) por ${total}. Para apartarlo acude a mostrador "
+        f"con tu anticipo mínimo de ${_minimo(total)} (50 %) antes del {timezone.localtime(ap.vence):%d/%m/%Y}.",
+    )
+    return ap
+
+
+@transaction.atomic
+def confirmar_solicitud(*, apartado, anticipo, metodo, usuario):
+    """El vendedor recibe el anticipo: se aparta el inventario y el pedido queda activo."""
+    apartado = Apartado.objects.select_for_update().get(pk=apartado.pk)
+    if apartado.estado != Apartado.SOLICITADO:
+        raise ReglaDeNegocioError("Este pedido ya fue confirmado o cerrado.")
     anticipo = _dinero(anticipo)
-
-    if cantidad < 1:
-        raise ReglaDeNegocioError("La cantidad debe ser de al menos 1 pieza.")
-    if not prenda.activa:
-        raise ReglaDeNegocioError("Esta prenda está dada de baja del catálogo.")
-    if tipo == Apartado.INVENTARIO and prenda.stock < cantidad:
-        raise ReglaDeNegocioError(
-            f"Solo hay {prenda.stock} pieza(s) disponibles de {prenda}. "
-            "Si el cliente la necesita, regístrela como pedido especial."
-        )
-
-    total = _dinero(prenda.precio * cantidad)
-    minimo = _dinero(total * Decimal(settings.ANTICIPO_PORCENTAJE) / Decimal(100))
+    minimo = _minimo(apartado.total)
     if anticipo < minimo:
         raise ReglaDeNegocioError(
             f"El anticipo mínimo es del {settings.ANTICIPO_PORCENTAJE}% (${minimo}). Se recibió ${anticipo}."
         )
-    if anticipo > total:
-        raise ReglaDeNegocioError(f"El anticipo (${anticipo}) no puede ser mayor al total (${total}).")
+    if anticipo > apartado.total:
+        raise ReglaDeNegocioError(f"El anticipo (${anticipo}) no puede ser mayor al total (${apartado.total}).")
 
-    apartado = Apartado.objects.create(
-        cliente=cliente,
-        prenda=prenda,
-        cantidad=cantidad,
-        tipo=tipo,
-        total=total,
-        vence=timezone.now() + timedelta(days=settings.VIGENCIA_APARTADO_DIAS),
-        vendedor=vendedor,
-        notas=notas,
-    )
+    # Apartar del inventario lo que haya; el resto queda por encargo
+    items = list(apartado.items.select_related("prenda"))
+    prendas = {p.pk: p for p in Prenda.objects.select_for_update().filter(pk__in=[i.prenda_id for i in items])}
+    for item in items:
+        prenda = prendas[item.prenda_id]
+        tomar = min(item.cantidad, prenda.stock)
+        item.de_inventario = tomar
+        item.save(update_fields=["de_inventario"])
+        prenda.stock -= tomar  # RF-09: el inventario se actualiza solo
+        prenda.save(update_fields=["stock"])
+
     Pago.objects.create(
         apartado=apartado,
         monto=anticipo,
-        tipo=Pago.ANTICIPO if anticipo < total else Pago.LIQUIDACION,
+        tipo=Pago.ANTICIPO if anticipo < apartado.total else Pago.LIQUIDACION,
         metodo=metodo,
-        registrado_por=vendedor,
+        registrado_por=usuario,
     )
+    apartado.vendedor = usuario
+    apartado.estado = Apartado.PAGADO if anticipo >= apartado.total else Apartado.ACTIVO
+    apartado.vence = timezone.now() + timedelta(days=settings.VIGENCIA_APARTADO_DIAS)
+    apartado.save(update_fields=["vendedor", "estado", "vence"])
 
-    if tipo == Apartado.INVENTARIO:
-        prenda.stock -= cantidad  # RF-09: el inventario se actualiza solo
-        prenda.save(update_fields=["stock"])
-
-    if anticipo >= total:
-        apartado.estado = Apartado.PAGADO
-        apartado.save(update_fields=["estado"])
-
-    etiqueta = "pedido especial" if tipo == Apartado.ESPECIAL else "apartado"
+    encargo = sum(i.cantidad - i.de_inventario for i in items)
+    extra = f" {encargo} pieza(s) se piden al proveedor." if encargo else ""
     _aviso(
         apartado,
         "CONFIRMACION",
-        f"Tu {etiqueta} {apartado.folio} de {cantidad} x {prenda} quedó registrado. "
-        f"Anticipo recibido: ${anticipo}. Saldo: ${apartado.saldo}. "
-        f"Vigente hasta el {timezone.localtime(apartado.vence):%d/%m/%Y}.",
+        f"Tu pedido {apartado.folio} ({apartado.resumen}) quedó registrado. Anticipo recibido: ${anticipo}. "
+        f"Saldo: ${apartado.saldo}. Vigente hasta el {timezone.localtime(apartado.vence):%d/%m/%Y}.{extra}",
     )
     if apartado.estado == Apartado.PAGADO:
-        _aviso(apartado, "LISTO", f"Tu {etiqueta} {apartado.folio} está liquidado. Pasa a recogerlo.")
+        _aviso(apartado, "LISTO", f"Tu pedido {apartado.folio} está liquidado. Pasa a recogerlo.")
     return apartado
 
 
@@ -103,7 +156,7 @@ def registrar_pago(*, apartado, monto, metodo, usuario):
     monto = _dinero(monto)
 
     if apartado.estado != Apartado.ACTIVO:
-        raise ReglaDeNegocioError(f"No se pueden registrar pagos en un apartado {apartado.get_estado_display().lower()}.")
+        raise ReglaDeNegocioError(f"No se pueden registrar pagos en un pedido {apartado.get_estado_display().lower()}.")
     if monto <= 0:
         raise ReglaDeNegocioError("El monto debe ser mayor a cero.")
     saldo = apartado.saldo
@@ -121,7 +174,7 @@ def registrar_pago(*, apartado, monto, metodo, usuario):
     if liquida:
         apartado.estado = Apartado.PAGADO
         apartado.save(update_fields=["estado"])
-        _aviso(apartado, "LISTO", f"Tu apartado {apartado.folio} está liquidado. Pasa a recogerlo.")
+        _aviso(apartado, "LISTO", f"Tu pedido {apartado.folio} está liquidado. Pasa a recogerlo.")
     else:
         _aviso(
             apartado,
@@ -138,28 +191,31 @@ def registrar_pago(*, apartado, monto, metodo, usuario):
 def entregar_apartado(*, apartado, usuario):
     apartado = Apartado.objects.select_for_update().get(pk=apartado.pk)
     if apartado.estado != Apartado.PAGADO:
-        raise ReglaDeNegocioError("Solo se puede entregar un apartado liquidado (saldo en $0).")
+        raise ReglaDeNegocioError("Solo se puede entregar un pedido liquidado (saldo en $0).")
     apartado.estado = Apartado.ENTREGADO
     apartado.save(update_fields=["estado"])
-    _aviso(apartado, "ENTREGADO", f"Entrega del apartado {apartado.folio} realizada. ¡Gracias por tu compra!")
+    _aviso(apartado, "ENTREGADO", f"Entrega del pedido {apartado.folio} realizada. ¡Gracias por tu compra!")
     return apartado
 
 
 # --------------------------------------------------------------------------
-# RF-06: cancelar apartado
+# RF-06: cancelar pedido / rechazar solicitud
 # --------------------------------------------------------------------------
 def _devolver_stock(apartado):
-    if apartado.tipo == Apartado.INVENTARIO:
-        prenda = Prenda.objects.select_for_update().get(pk=apartado.prenda_id)
-        prenda.stock += apartado.cantidad
-        prenda.save(update_fields=["stock"])
+    for item in apartado.items.all():
+        if item.de_inventario:
+            prenda = Prenda.objects.select_for_update().get(pk=item.prenda_id)
+            prenda.stock += item.de_inventario
+            prenda.save(update_fields=["stock"])
+            item.de_inventario = 0
+            item.save(update_fields=["de_inventario"])
 
 
 @transaction.atomic
 def cancelar_apartado(*, apartado, motivo, usuario):
     apartado = Apartado.objects.select_for_update().get(pk=apartado.pk)
     if not apartado.puede_cancelarse:
-        raise ReglaDeNegocioError(f"No se puede cancelar un apartado {apartado.get_estado_display().lower()}.")
+        raise ReglaDeNegocioError(f"No se puede cancelar un pedido {apartado.get_estado_display().lower()}.")
     motivo = (motivo or "").strip()
     if not motivo:
         raise ReglaDeNegocioError("Indica el motivo de la cancelación.")
@@ -168,7 +224,7 @@ def cancelar_apartado(*, apartado, motivo, usuario):
     apartado.estado = Apartado.CANCELADO
     apartado.motivo_cancelacion = motivo
     apartado.save(update_fields=["estado", "motivo_cancelacion"])
-    _aviso(apartado, "CANCELADO", f"Tu apartado {apartado.folio} fue cancelado. Motivo: {motivo}.")
+    _aviso(apartado, "CANCELADO", f"Tu pedido {apartado.folio} fue cancelado. Motivo: {motivo}.")
     return apartado
 
 
@@ -177,18 +233,18 @@ def cancelar_apartado(*, apartado, motivo, usuario):
 # --------------------------------------------------------------------------
 @transaction.atomic
 def procesar_vencimientos(ahora=None):
-    """Marca como vencidos los apartados pasados de fecha y avisa de los próximos a vencer."""
+    """Marca como vencidos los pedidos pasados de fecha y avisa de los próximos a vencer."""
     ahora = ahora or timezone.now()
     vencidos, avisados = 0, 0
 
-    for ap in Apartado.objects.select_for_update().filter(estado=Apartado.ACTIVO, vence__lt=ahora):
+    for ap in Apartado.objects.select_for_update().filter(estado__in=[Apartado.ACTIVO, Apartado.SOLICITADO], vence__lt=ahora):
         _devolver_stock(ap)
         ap.estado = Apartado.VENCIDO
         ap.save(update_fields=["estado"])
         _aviso(
             ap,
             "VENCIDO",
-            f"Tu apartado {ap.folio} venció sin liquidarse. La prenda regresó a inventario.",
+            f"Tu pedido {ap.folio} venció sin completarse. Las piezas apartadas regresaron a inventario.",
         )
         vencidos += 1
 
@@ -200,7 +256,7 @@ def procesar_vencimientos(ahora=None):
         _aviso(
             ap,
             "POR_VENCER",
-            f"Tu apartado {ap.folio} vence el {timezone.localtime(ap.vence):%d/%m/%Y}. "
+            f"Tu pedido {ap.folio} vence el {timezone.localtime(ap.vence):%d/%m/%Y}. "
             f"Saldo pendiente: ${ap.saldo}.",
         )
         ap.aviso_vencimiento_enviado = True
@@ -225,9 +281,14 @@ def registrar_entrada(*, prenda, cantidad, proveedor, remision, usuario):
     prenda.stock += cantidad
     prenda.save(update_fields=["stock"])
 
-    # Avisar a quien tenía un pedido especial de esta prenda
-    for ap in Apartado.objects.filter(prenda=prenda, tipo=Apartado.ESPECIAL, estado__in=[Apartado.ACTIVO, Apartado.PAGADO]):
-        _aviso(ap, "LLEGO_PEDIDO", f"Llegó tu pedido especial {ap.folio} ({prenda}). Pasa a la tienda.")
+    # Avisar a quien esperaba esta prenda por encargo
+    esperando = Apartado.objects.filter(
+        estado__in=[Apartado.ACTIVO, Apartado.PAGADO],
+        items__prenda=prenda,
+        items__cantidad__gt=F("items__de_inventario"),
+    ).distinct()
+    for ap in esperando:
+        _aviso(ap, "LLEGO_PEDIDO", f"Llegó mercancía de tu pedido {ap.folio} ({prenda}). Pasa a la tienda.")
     return entrada
 
 
@@ -235,15 +296,17 @@ def registrar_entrada(*, prenda, cantidad, proveedor, remision, usuario):
 # Consultas de apoyo
 # --------------------------------------------------------------------------
 def buscar_apartado_publico(folio, telefono):
-    """RF-05: el cliente consulta su apartado con folio + teléfono."""
+    """RF-05: el cliente consulta su pedido con folio + teléfono."""
     folio = (folio or "").strip().upper()
     telefono = "".join(ch for ch in (telefono or "") if ch.isdigit())
     try:
-        return Apartado.objects.select_related("cliente", "prenda").get(folio=folio, cliente__telefono=telefono)
+        return Apartado.objects.select_related("cliente").prefetch_related("items__prenda").get(
+            folio=folio, cliente__telefono=telefono
+        )
     except Apartado.DoesNotExist:
         return None
 
 
 def get_or_create_cliente(nombre, telefono, email=""):
-    cliente, _ = Cliente.objects.get_or_create(telefono=telefono, defaults={"nombre": nombre, "email": email})
+    cliente, creado = Cliente.objects.get_or_create(telefono=telefono, defaults={"nombre": nombre, "email": email})
     return cliente

@@ -12,7 +12,7 @@
   <thead><tr><th>Código</th><th>Prenda</th><th>Talla</th><th>Color</th><th class="num">Precio</th><th class="num">Stock</th><th class="num">Mín.</th><th>Estado</th>{% if es_gerente %}<th></th>{% endif %}</tr></thead>
   <tbody>{% for p in prendas %}<tr>
     <td>{{ p.codigo }}</td><td>{{ p.modelo }}</td><td>{{ p.talla }}</td><td>{{ p.color }}</td>
-    <td class="num">${{ p.precio|floatformat:2 }}</td><td class="num"><b>{{ p.stock }}</b></td><td class="num">{{ p.stock_minimo }}</td>
+    <td class="num">${{ p.precio|floatformat:"2g" }}</td><td class="num"><b>{{ p.stock }}</b></td><td class="num">{{ p.stock_minimo }}</td>
     <td>{% if not p.activa %}<span class="tag">Oculta</span>{% elif p.stock == 0 %}<span class="tag bad">Agotada</span>{% elif p.stock_bajo %}<span class="tag warn">Stock bajo</span>{% else %}<span class="tag ok">OK</span>{% endif %}</td>
     {% if es_gerente %}<td><a href="{% url 'tienda:prenda_editar' p.pk %}">Editar</a></td>{% endif %}</tr>
   {% empty %}<tr><td colspan="9" class="empty">Sin resultados.</td></tr>{% endfor %}</tbody>

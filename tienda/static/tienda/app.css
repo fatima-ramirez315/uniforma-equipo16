@@ -114,3 +114,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .empty { text-align: center; padding: 36px 16px; color: var(--muted); }
 .login { max-width: 400px; margin: 40px auto; }
 footer { color: var(--muted); font-size: .85rem; text-align: center; padding: 24px 16px 40px; }
+
+/* Catálogo por modelo y pedido */
+.modelo { margin-bottom: 16px; }
+.mhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.mhead h2 { margin: 2px 0; font-size: 1.25rem; }
+.mhead .precio { font-size: 1.3rem; font-weight: 750; }
+.tallas td, .tallas th { padding: 8px 12px; }
+.qty { width: 110px; text-align: right; padding: 7px 10px; }
+td.num .enc { min-height: 1.1em; }
+.g5 { grid-template-columns: repeat(5, 1fr); }
+@media (max-width: 960px) { .g5 { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .g5 { grid-template-columns: 1fr; } }
+.sr { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+tfoot td { background: var(--bg); border-top: 1px solid var(--line); }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.tabs a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: var(--card); font-size: .9rem; }
+.tabs a.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+@media (prefers-color-scheme: dark) { .tabs a.on { color: #0d1224; } }
+.tabs a:hover { text-decoration: none; background: var(--brand-l); }
+.tabs a.on:hover { background: var(--brand-d); }
+.tabs .n { opacity: .75; margin-left: 4px; }
+td:first-child a { white-space: nowrap; }

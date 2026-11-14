@@ -9,6 +9,9 @@ urlpatterns = [
     # Públicas
     path("", views.catalogo, name="catalogo"),
     path("seguimiento/", views.seguimiento, name="seguimiento"),
+    path("pedido/agregar/", views.carrito_agregar, name="carrito_agregar"),
+    path("pedido/", views.carrito, name="carrito"),
+    path("pedido/enviado/", views.pedido_listo, name="pedido_listo"),
     path("ingresar/", views.IngresarView.as_view(), name="login"),
     path("salir/", LogoutView.as_view(), name="logout"),
     # Panel interno
@@ -23,6 +26,7 @@ urlpatterns = [
     path("apartados/", views.apartados, name="apartados"),
     path("apartados/nuevo/", views.apartado_nuevo, name="apartado_nuevo"),
     path("apartados/<int:pk>/", views.apartado_detalle, name="apartado_detalle"),
+    path("apartados/<int:pk>/confirmar/", views.apartado_confirmar, name="apartado_confirmar"),
     path("apartados/<int:pk>/pago/", views.apartado_pago, name="apartado_pago"),
     path("apartados/<int:pk>/entregar/", views.apartado_entregar, name="apartado_entregar"),
     path("apartados/<int:pk>/cancelar/", views.apartado_cancelar, name="apartado_cancelar"),

@@ -14,9 +14,10 @@
       {% url 'tienda:catalogo' as u_cat %}{% url 'tienda:seguimiento' as u_seg %}
       <a href="{{ u_cat }}" {% if request.path == u_cat %}class="on"{% endif %}>Catálogo</a>
       <a href="{{ u_seg }}" {% if request.path == u_seg %}class="on"{% endif %}>Mi apartado</a>
+      <a href="{% url 'tienda:carrito' %}" {% if request.path == '/pedido/' %}class="on"{% endif %}>Mi pedido{% if nav_carrito %}<span class="badge" title="Piezas en tu pedido">{{ nav_carrito }}</span>{% endif %}</a>
       {% if es_personal %}
         <a href="{% url 'tienda:panel' %}">Panel</a>
-        <a href="{% url 'tienda:apartados' %}">Apartados</a>
+        <a href="{% url 'tienda:apartados' %}">Pedidos{% if nav_solicitudes %}<span class="badge" title="Solicitudes en línea por confirmar">{{ nav_solicitudes }}</span>{% endif %}</a>
         <a href="{% url 'tienda:clientes' %}">Clientes</a>
         <a href="{% url 'tienda:prendas' %}">Inventario{% if nav_stock_bajo %}<span class="badge" title="Prendas con stock bajo">{{ nav_stock_bajo }}</span>{% endif %}</a>
         <a href="{% url 'tienda:notificaciones' %}">Avisos{% if nav_pendientes %}<span class="badge">{{ nav_pendientes }}</span>{% endif %}</a>
