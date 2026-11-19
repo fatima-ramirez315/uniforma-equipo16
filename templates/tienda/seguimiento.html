@@ -31,7 +31,14 @@
     </div>
   {% endif %}
 
-  {% if ap.estado == 'SOLICITADO' %}<div class="card" style="background:var(--warn-l);border-color:var(--warn);margin-top:12px">Para apartar tus prendas acude a mostrador con tu anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> antes del <b>{{ ap.vence|date:"d/m/Y" }}</b>.</div>{% endif %}
+  {% if ap.estado == 'SOLICITADO' %}<div class="card" style="background:var(--warn-l);border-color:var(--warn);margin-top:12px">
+    Para apartar tus prendas necesitas pagar el anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> antes del <b>{{ ap.vence|date:"d/m/Y" }}</b>.
+    <ul class="avisos" style="margin:8px 0">
+      <li><b>En caja:</b> acude a la tienda con tu folio.</li>
+      <li><b>Por transferencia:</b> {{ banco.banco }} · {{ banco.titular }} · CLABE <b>{{ banco.clabe }}</b> · concepto <b>{{ ap.folio }}</b></li>
+    </ul>
+    {% include "tienda/_referencia.html" with next="seguimiento" %}
+  </div>{% endif %}
   <dl class="kv" style="margin-top:14px">
     <dt>Cliente</dt><dd>{{ ap.cliente.nombre }}</dd>
     <dt>Total</dt><dd>${{ ap.total|floatformat:"2g" }}</dd>

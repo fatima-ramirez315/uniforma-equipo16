@@ -10,9 +10,21 @@
     <tbody>{% for i in ap.items.all %}<tr><td>{{ i.prenda.modelo }} <span class="muted small">· {{ i.prenda.color }}</span></td><td>{{ i.prenda.talla }}</td><td class="num">{{ i.cantidad }}</td><td class="num">${{ i.subtotal|floatformat:"2g" }}</td></tr>{% endfor %}</tbody>
     <tfoot><tr><td colspan="3" class="num">Total</td><td class="num"><b>${{ ap.total|floatformat:"2g" }}</b></td></tr></tfoot>
   </table></div>
+  {% if ap.forma_pago == 'TRANSFERENCIA' %}
   <div class="card" style="background:var(--warn-l);border-color:var(--warn)">
-    <b>Siguiente paso:</b> acude a mostrador con tu anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> (50&nbsp;%) antes del <b>{{ ap.vence|date:"d/m/Y" }}</b> para apartar tus prendas.
+    <b>Siguiente paso: transfiere tu anticipo</b> mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> (50&nbsp;%) antes del <b>{{ ap.vence|date:"d/m/Y" }}</b>.
+    <dl class="kv" style="margin:10px 0">
+      <dt>Banco</dt><dd>{{ banco.banco }}</dd><dt>Titular</dt><dd>{{ banco.titular }}</dd><dt>CLABE</dt><dd><b>{{ banco.clabe }}</b></dd>
+      <dt>Concepto</dt><dd><b>{{ ap.folio }}</b> (escribe tu folio)</dd>
+    </dl>
+    {% include "tienda/_referencia.html" with next="listo" %}
   </div>
+  {% else %}
+  <div class="card" style="background:var(--warn-l);border-color:var(--warn)">
+    <b>Siguiente paso:</b> acude a caja con tu anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> (50&nbsp;%) antes del <b>{{ ap.vence|date:"d/m/Y" }}</b> para apartar tus prendas.
+    <p class="muted small" style="margin:8px 0 0">¿Prefieres transferir? Entra a «Seguimiento» con tu folio y teléfono y captura tu referencia.</p>
+  </div>
+  {% endif %}
   <div class="actions" style="margin-top:16px">
     <a class="btn" href="{% url 'tienda:seguimiento' %}?folio={{ ap.folio }}&telefono={{ telefono }}">Ver el estado de mi pedido</a>
     <a class="btn ghost" href="{% url 'tienda:catalogo' %}">Volver al catálogo</a>

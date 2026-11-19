@@ -1,0 +1,11 @@
+{% if ap.referencia_pago %}
+  <p class="tag ok" style="display:inline-block">Referencia registrada: {{ ap.referencia_pago }}</p>
+  <p class="muted small" style="margin:6px 0 0">La tienda verificará tu transferencia y confirmará tu pedido.</p>
+{% else %}
+<form method="post" action="{% url 'tienda:reportar_pago' %}" class="filters" style="margin-top:6px">{% csrf_token %}
+  <input type="hidden" name="folio" value="{{ ap.folio }}"><input type="hidden" name="telefono" value="{{ ap.cliente.telefono }}"><input type="hidden" name="next" value="{{ next }}">
+  <div class="field"><label for="ref-{{ ap.pk }}">Ya transferí: referencia o clave de rastreo</label>
+    <input class="input" id="ref-{{ ap.pk }}" name="referencia" maxlength="60" placeholder="Ej. MBAN01002611180001" required></div>
+  <button class="btn" type="submit">Avisar que ya pagué</button>
+</form>
+{% endif %}

@@ -141,9 +141,19 @@ class Apartado(models.Model):
     notas = models.CharField(max_length=255, blank=True)
     motivo_cancelacion = models.CharField(max_length=255, blank=True)
     aviso_vencimiento_enviado = models.BooleanField(default=False)
+    CAJA = "CAJA"
+    TRANSFERENCIA = "TRANSFERENCIA"
+    FORMAS_PAGO = [(CAJA, "Pagaré en caja (tienda)"), (TRANSFERENCIA, "Pagaré por transferencia bancaria")]
+    forma_pago = models.CharField("Forma de pago elegida", max_length=14, choices=FORMAS_PAGO, default=CAJA)
+    referencia_pago = models.CharField("Referencia de la transferencia", max_length=60, blank=True)
+    referencia_en = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-creado"]
+
+    @property
+    def espera_transferencia(self):
+        return self.estado == self.SOLICITADO and self.forma_pago == self.TRANSFERENCIA
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

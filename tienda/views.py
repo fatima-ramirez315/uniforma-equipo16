@@ -6,16 +6,18 @@ from django.contrib import messages
 from django.contrib.auth.views import LoginView
 from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import services
 from .forms import (
-    CancelarForm, ClienteForm, ConfirmarForm, EntradaForm, LoginForm, PagoForm, PedidoClienteForm, PedidoMostradorForm,
+    CancelarForm, ClienteForm, ConfirmarForm, EntradaForm, LoginForm, PagoForm, PedidoEnLineaForm, PedidoMostradorForm,
     PrendaForm, SeguimientoForm,
 )
 from .models import Apartado, ApartadoItem, Cliente, EntradaMercancia, Notificacion, Pago, Prenda
+from .pagos import datos_transferencia
 from .permisos import es_personal, gerente_requerido, personal_requerido
 from .services import ReglaDeNegocioError
 
@@ -142,7 +144,7 @@ def _lineas_carrito(request):
 def carrito(request):
     """«Mi pedido»: cantidades por talla y datos para enviar el pedido."""
     personal = es_personal(request.user)
-    Form = PedidoMostradorForm if personal else PedidoClienteForm
+    Form = PedidoMostradorForm if personal else PedidoEnLineaForm
     if request.method == "POST":
         # 1) actualizar cantidades (0 = quitar)
         nuevo = {}
@@ -173,7 +175,7 @@ def carrito(request):
                 ap = services.crear_pedido(
                     cliente=cliente, lineas=[(l["prenda"], l["cantidad"]) for l in lineas], notas=d["notas"],
                     vendedor=request.user if personal else None,
-                    anticipo=d.get("anticipo"), metodo=d.get("metodo", "EFECTIVO"),
+                    anticipo=d.get("anticipo"), metodo=d.get("metodo", "EFECTIVO"), forma_pago=d.get("forma_pago", "CAJA"),
                 )
             except ReglaDeNegocioError as err:
                 form.add_error(None, str(err))
@@ -202,7 +204,26 @@ def pedido_listo(request):
     if not datos:
         return redirect("tienda:catalogo")
     ap = services.buscar_apartado_publico(datos["folio"], datos["telefono"])
-    return render(request, "tienda/pedido_listo.html", {"ap": ap, "telefono": datos["telefono"]})
+    return render(request, "tienda/pedido_listo.html", {"ap": ap, "telefono": datos["telefono"], "banco": datos_transferencia()})
+
+
+@require_POST
+def reportar_pago(request):
+    """El cliente deja la referencia de su transferencia (se identifica con folio + teléfono)."""
+    folio, telefono = request.POST.get("folio", ""), request.POST.get("telefono", "")
+    ap = services.buscar_apartado_publico(folio, telefono)
+    if not ap:
+        messages.error(request, "No encontramos ese pedido.")
+        return redirect("tienda:seguimiento")
+    try:
+        services.reportar_transferencia(apartado=ap, referencia=request.POST.get("referencia", ""))
+        messages.success(request, "¡Gracias! Registramos tu referencia. La tienda verificará tu transferencia y confirmará tu pedido.")
+    except ReglaDeNegocioError as err:
+        messages.error(request, str(err))
+    destino = request.POST.get("next", "")
+    if destino == "listo":
+        return redirect("tienda:pedido_listo")
+    return redirect(f"{reverse('tienda:seguimiento')}?folio={ap.folio}&telefono={ap.cliente.telefono}")
 
 
 def seguimiento(request):
@@ -214,6 +235,7 @@ def seguimiento(request):
         apartado = services.buscar_apartado_publico(form.cleaned_data["folio"], form.cleaned_data["telefono"])
     ctx = {"form": form, "apartado": apartado, "buscado": buscado}
     if apartado:
+        ctx["banco"] = datos_transferencia()
         ctx["pagos"] = apartado.pagos.all()
         ctx["avisos"] = apartado.notificaciones.all()
     return render(request, "tienda/seguimiento.html", ctx)
@@ -358,7 +380,7 @@ def apartado_detalle(request, pk):
     return render(request, "tienda/apartado_detalle.html", {
         "ap": ap, "items": items, "pagos": ap.pagos.select_related("registrado_por"), "avisos": ap.notificaciones.all(),
         "pago_form": PagoForm(initial={"monto": ap.saldo}), "cancelar_form": CancelarForm(),
-        "confirmar_form": ConfirmarForm(initial={"anticipo": ap.anticipo_requerido}),
+        "confirmar_form": ConfirmarForm(initial={"anticipo": ap.anticipo_requerido, "metodo": "TRANSFERENCIA" if ap.forma_pago == "TRANSFERENCIA" else "EFECTIVO"}),
     })
 
 

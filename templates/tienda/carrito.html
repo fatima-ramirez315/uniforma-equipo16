@@ -33,7 +33,7 @@
   <div class="card" style="max-width:640px">
     <h2>{% if personal %}Datos del cliente y anticipo{% else %}Tus datos{% endif %}</h2>
     {% include "tienda/_form_fields.html" %}
-    {% if not personal %}<p class="muted small">Al enviar el pedido se genera tu folio. Para apartarlo, acude a mostrador con tu anticipo mínimo del 50&nbsp;%. Sin anticipo la solicitud caduca a los 7 días.</p>{% endif %}
+    {% if not personal %}<p class="muted small">Al enviar el pedido se genera tu folio. Para apartarlo debes pagar un anticipo mínimo del 50&nbsp;%, en caja o por transferencia. Sin anticipo la solicitud caduca a los 7 días.</p>{% endif %}
     <button class="btn" type="submit" name="accion" value="pedir">{% if personal %}Registrar pedido con anticipo{% else %}Enviar mi pedido{% endif %}</button>
   </div>
 </form>

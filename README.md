@@ -47,3 +47,12 @@ Si ya tenías una base de datos de una versión anterior, `python manage.py migr
 ## Estructura
 - `tienda/models.py` modelos · `tienda/services.py` reglas de negocio (transacciones) · `tienda/views.py` vistas
 - `tienda/permisos.py` roles Vendedor/Gerente · `templates/` pantallas · `tienda/tests.py` pruebas
+
+
+## Formas de pago del anticipo (cliente en línea)
+Al enviar su pedido el cliente elige **pagar en caja** o **por transferencia**. Con transferencia ve los datos de la cuenta,
+transfiere y captura su referencia (en la pantalla de confirmación o en «Seguimiento»). El vendedor la ve en **Pedidos**,
+verifica el depósito en el banco y pulsa **Confirmar con anticipo**.
+
+Los datos de la cuenta de ejemplo se cambian con variables de entorno (sin tocar el código):
+`TRANSFER_BANCO`, `TRANSFER_TITULAR` y `TRANSFER_CLABE`.

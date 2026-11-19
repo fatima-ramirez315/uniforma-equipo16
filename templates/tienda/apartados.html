@@ -16,7 +16,7 @@
   <thead><tr><th>Folio</th><th>Cliente</th><th>Origen</th><th class="num">Piezas</th><th>Estado</th><th>Vence</th><th class="num">Total</th><th class="num">Saldo</th></tr></thead>
   <tbody>{% for a in apartados %}<tr>
     <td><a href="{% url 'tienda:apartado_detalle' a.pk %}">{{ a.folio }}</a></td><td>{{ a.cliente.nombre }}<br><span class="muted small">{{ a.cliente.telefono }}</span></td>
-    <td>{% if a.origen == 'EN_LINEA' %}<span class="tag warn">En línea</span>{% else %}Mostrador{% endif %}</td>
+    <td>{% if a.origen == 'EN_LINEA' %}<span class="tag warn">En línea</span>{% if a.estado == 'SOLICITADO' and a.forma_pago == 'TRANSFERENCIA' %}<br><span class="tag {% if a.referencia_pago %}ok{% endif %}">Transferencia{% if a.referencia_pago %} · con referencia{% endif %}</span>{% endif %}{% else %}Mostrador{% endif %}</td>
     <td class="num">{{ a.n_piezas }}</td>
     <td><span class="tag {% if a.estado == 'PAGADO' or a.estado == 'ENTREGADO' %}ok{% elif a.estado == 'CANCELADO' or a.estado == 'VENCIDO' %}bad{% elif a.estado == 'SOLICITADO' %}warn{% endif %}">{{ a.get_estado_display }}</span></td>
     <td>{{ a.vence|date:"d/m/Y" }}</td><td class="num">${{ a.total|floatformat:"2g" }}</td><td class="num">${{ a.saldo|floatformat:"2g" }}</td></tr>

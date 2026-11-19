@@ -137,3 +137,7 @@ tfoot td { background: var(--bg); border-top: 1px solid var(--line); }
 .tabs .n { opacity: .75; margin-left: 4px; }
 td:first-child a { white-space: nowrap; }
 .dot{display:inline-block;width:12px;height:12px;border-radius:50%;border:1px solid #94a3b8;vertical-align:middle}
+ul#id_forma_pago{list-style:none;padding:0;margin:4px 0}
+ul#id_forma_pago li{margin:6px 0}
+ul#id_forma_pago label{display:flex;gap:8px;align-items:center;font-weight:500}
+input.radio{width:auto}

@@ -10,6 +10,7 @@
   <div class="card"><h2>Datos</h2>
     <dl class="kv">
       <dt>Cliente</dt><dd>{{ ap.cliente.nombre }} · {{ ap.cliente.telefono }}</dd>
+      {% if ap.origen == 'EN_LINEA' %}<dt>Pago elegido</dt><dd>{{ ap.get_forma_pago_display }}{% if ap.referencia_pago %}<br><span class="tag ok">Referencia: {{ ap.referencia_pago }}</span> <span class="muted small">{{ ap.referencia_en|date:"d/m/Y H:i" }}</span>{% elif ap.espera_transferencia %} <span class="tag warn">aún sin referencia</span>{% endif %}</dd>{% endif %}
       <dt>Piezas</dt><dd>{{ ap.piezas }}{% if ap.por_encargo %} <span class="tag warn">{{ ap.por_encargo }} por encargo</span>{% endif %}</dd>
       <dt>Total</dt><dd>${{ ap.total|floatformat:"2g" }}</dd>
       <dt>Pagado</dt><dd>${{ ap.pagado|floatformat:"2g" }}</dd>
@@ -22,7 +23,7 @@
 
   <div class="card"><h2>Acciones</h2>
     {% if ap.es_solicitud %}
-      <p class="muted small">El cliente pidió en línea. Al recibir su anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> se aparta el inventario.</p>
+      <p class="muted small">El cliente pidió en línea. Al recibir su anticipo mínimo de <b>${{ ap.anticipo_requerido|floatformat:"2g" }}</b> se aparta el inventario.{% if ap.espera_transferencia %} Eligió <b>transferencia</b>: verifica el depósito en el banco{% if ap.referencia_pago %} (referencia <b>{{ ap.referencia_pago }}</b>){% endif %} antes de confirmar.{% endif %}</p>
       <form method="post" action="{% url 'tienda:apartado_confirmar' ap.pk %}">{% csrf_token %}
         {% include "tienda/_form_fields.html" with form=confirmar_form %}
         <button class="btn" type="submit">Confirmar con anticipo</button>

@@ -121,7 +121,7 @@ class PedidoDelCliente(Base):
         self.agregar(**{str(self.ch.pk): 3, str(self.m.pk): 2})
         r = self.client.post(reverse("tienda:carrito"), {
             "accion": "pedir", f"cant_{self.ch.pk}": 3, f"cant_{self.m.pk}": 2,
-            "nombre": "Luis Mora", "telefono": "7779998888", "email": "", "notas": "Primaria",
+            "nombre": "Luis Mora", "telefono": "7779998888", "email": "", "notas": "Primaria", "forma_pago": "CAJA",
         })
         self.assertRedirects(r, reverse("tienda:pedido_listo"))
         ap = Apartado.objects.get(cliente__telefono="7779998888")
@@ -500,3 +500,59 @@ class DatosDeDemostracion(TestCase):
             demo.autoseed()
         self.assertGreater(Prenda.objects.count(), 100)
         self.assertTrue(User.objects.filter(username="gerente").exists())
+
+
+# ===========================================================================
+class PagoPorTransferencia(Base):
+    def enviar(self, forma):
+        self.client.post(reverse("tienda:carrito_agregar"), {f"cant_{self.m.pk}": 2})
+        self.client.post(reverse("tienda:carrito"), {
+            "accion": "pedir", f"cant_{self.m.pk}": 2, "nombre": "Luis Mora", "telefono": "7779998888", "forma_pago": forma,
+        })
+        return Apartado.objects.get(cliente__telefono="7779998888")
+
+    def test_el_cliente_elige_transferencia_y_ve_los_datos_bancarios(self):
+        ap = self.enviar("TRANSFERENCIA")
+        self.assertEqual(ap.forma_pago, "TRANSFERENCIA")
+        r = self.client.get(reverse("tienda:pedido_listo"))
+        self.assertContains(r, "CLABE")
+        self.assertContains(r, ap.folio)
+
+    def test_pagar_en_caja_sigue_siendo_la_opcion_por_defecto(self):
+        ap = self.enviar("CAJA")
+        self.assertEqual(ap.forma_pago, "CAJA")
+        self.assertNotContains(self.client.get(reverse("tienda:pedido_listo")), "CLABE")
+
+    def test_la_forma_de_pago_es_obligatoria_para_el_cliente(self):
+        self.client.post(reverse("tienda:carrito_agregar"), {f"cant_{self.m.pk}": 1})
+        r = self.client.post(reverse("tienda:carrito"), {"accion": "pedir", f"cant_{self.m.pk}": 1, "nombre": "Luis Mora", "telefono": "7779998888"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(Apartado.objects.count(), 0)
+
+    def test_el_cliente_deja_su_referencia_y_el_vendedor_confirma(self):
+        ap = self.enviar("TRANSFERENCIA")
+        r = self.client.post(reverse("tienda:reportar_pago"), {"folio": ap.folio, "telefono": "7779998888", "referencia": "MBAN0100261118"})
+        self.assertEqual(r.status_code, 302)
+        ap.refresh_from_db()
+        self.assertEqual(ap.referencia_pago, "MBAN0100261118")
+        self.assertEqual(ap.estado, Apartado.SOLICITADO)  # solo el vendedor puede confirmar
+        self.client.force_login(self.vendedor)
+        det = self.client.get(reverse("tienda:apartado_detalle", args=[ap.pk]))
+        self.assertContains(det, "MBAN0100261118")
+        self.assertEqual(det.context["confirmar_form"].initial["metodo"], "TRANSFERENCIA")
+        self.client.post(reverse("tienda:apartado_confirmar", args=[ap.pk]), {"anticipo": ap.anticipo_requerido, "metodo": "TRANSFERENCIA"})
+        ap.refresh_from_db()
+        self.assertEqual(ap.estado, Apartado.ACTIVO)
+        self.assertEqual(ap.pagos.first().metodo, "TRANSFERENCIA")
+
+    def test_referencia_con_telefono_equivocado_o_muy_corta_se_rechaza(self):
+        ap = self.enviar("TRANSFERENCIA")
+        self.client.post(reverse("tienda:reportar_pago"), {"folio": ap.folio, "telefono": "7770000000", "referencia": "ABCDEFGH"})
+        self.client.post(reverse("tienda:reportar_pago"), {"folio": ap.folio, "telefono": "7779998888", "referencia": "12"})
+        ap.refresh_from_db()
+        self.assertEqual(ap.referencia_pago, "")
+
+    def test_el_cliente_puede_capturar_la_referencia_desde_seguimiento(self):
+        ap = self.enviar("CAJA")
+        r = self.client.get(reverse("tienda:seguimiento"), {"folio": ap.folio, "telefono": "7779998888"})
+        self.assertContains(r, "Avisar que ya pagué")

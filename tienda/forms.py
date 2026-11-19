@@ -3,7 +3,7 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 
-from .models import Cliente, Pago, Prenda
+from .models import Apartado, Cliente, Pago, Prenda
 
 
 class StyledMixin:
@@ -76,6 +76,13 @@ class PedidoClienteForm(StyledMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._style()
+
+
+class PedidoEnLineaForm(PedidoClienteForm):
+    """El cliente elige cómo pagará su anticipo."""
+
+    forma_pago = forms.ChoiceField(label="¿Cómo pagarás tu anticipo?", choices=Apartado.FORMAS_PAGO, initial=Apartado.CAJA,
+                                   widget=forms.RadioSelect(attrs={"class": "radio"}))
 
 
 class PedidoMostradorForm(PedidoClienteForm):

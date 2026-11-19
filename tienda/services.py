@@ -55,7 +55,7 @@ def normalizar_lineas(lineas):
 # RF-02 / RF-08 / RF-09: crear pedido (solicitud del cliente o apartado en mostrador)
 # --------------------------------------------------------------------------
 @transaction.atomic
-def crear_pedido(*, cliente, lineas, vendedor=None, anticipo=None, metodo="EFECTIVO", notas=""):
+def crear_pedido(*, cliente, lineas, vendedor=None, anticipo=None, metodo="EFECTIVO", notas="", forma_pago="CAJA"):
     """Crea un pedido con varias partidas.
 
     - Sin ``vendedor``/``anticipo``: es una *solicitud en línea* del cliente (no mueve inventario).
@@ -78,6 +78,7 @@ def crear_pedido(*, cliente, lineas, vendedor=None, anticipo=None, metodo="EFECT
         vence=ahora + timedelta(days=dias),
         vendedor=vendedor,
         notas=notas,
+        forma_pago=forma_pago if forma_pago in (Apartado.CAJA, Apartado.TRANSFERENCIA) else Apartado.CAJA,
     )
     for prenda, cantidad in lineas:
         ApartadoItem.objects.create(apartado=ap, prenda=prenda, cantidad=cantidad, precio_unitario=prenda.precio)
@@ -87,12 +88,13 @@ def crear_pedido(*, cliente, lineas, vendedor=None, anticipo=None, metodo="EFECT
             raise ReglaDeNegocioError("Indica el anticipo recibido.")
         return confirmar_solicitud(apartado=ap, anticipo=anticipo, metodo=metodo, usuario=vendedor)
 
-    _aviso(
-        ap,
-        "SOLICITUD",
-        f"Recibimos tu pedido {ap.folio} ({ap.resumen}) por ${total}. Para apartarlo acude a mostrador "
-        f"con tu anticipo mínimo de ${_minimo(total)} (50 %) antes del {timezone.localtime(ap.vence):%d/%m/%Y}.",
-    )
+    if ap.forma_pago == Apartado.TRANSFERENCIA:
+        como = (f"Haz tu transferencia por el anticipo mínimo de ${_minimo(total)} (50 %) y captura tu referencia en la página "
+                f"de seguimiento antes del {timezone.localtime(ap.vence):%d/%m/%Y}. La tienda confirmará tu pago.")
+    else:
+        como = (f"Para apartarlo acude a mostrador con tu anticipo mínimo de ${_minimo(total)} (50 %) "
+                f"antes del {timezone.localtime(ap.vence):%d/%m/%Y}.")
+    _aviso(ap, "SOLICITUD", f"Recibimos tu pedido {ap.folio} ({ap.resumen}) por ${total}. {como}")
     return ap
 
 
@@ -295,6 +297,24 @@ def registrar_entrada(*, prenda, cantidad, proveedor, remision, usuario):
 # --------------------------------------------------------------------------
 # Consultas de apoyo
 # --------------------------------------------------------------------------
+@transaction.atomic
+def reportar_transferencia(*, apartado, referencia):
+    """El cliente avisa que ya transfirió y deja su referencia; el vendedor la verifica y confirma."""
+    apartado = Apartado.objects.select_for_update().get(pk=apartado.pk)
+    referencia = (referencia or "").strip()
+    if apartado.estado != Apartado.SOLICITADO:
+        raise ReglaDeNegocioError("Este pedido ya no está esperando el anticipo.")
+    if len(referencia) < 4:
+        raise ReglaDeNegocioError("Escribe la referencia o clave de rastreo de tu transferencia (mínimo 4 caracteres).")
+    apartado.forma_pago = Apartado.TRANSFERENCIA
+    apartado.referencia_pago = referencia[:60]
+    apartado.referencia_en = timezone.now()
+    apartado.save(update_fields=["forma_pago", "referencia_pago", "referencia_en"])
+    _aviso(apartado, "SOLICITUD", f"Registramos tu referencia de transferencia «{apartado.referencia_pago}» del pedido {apartado.folio}. "
+                                  "La tienda verificará el pago y confirmará tu pedido.")
+    return apartado
+
+
 def buscar_apartado_publico(folio, telefono):
     """RF-05: el cliente consulta su pedido con folio + teléfono."""
     folio = (folio or "").strip().upper()
