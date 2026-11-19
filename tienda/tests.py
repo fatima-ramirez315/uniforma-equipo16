@@ -556,3 +556,48 @@ class PagoPorTransferencia(Base):
         ap = self.enviar("CAJA")
         r = self.client.get(reverse("tienda:seguimiento"), {"folio": ap.folio, "telefono": "7779998888"})
         self.assertContains(r, "Avisar que ya pagué")
+
+
+# ===========================================================================
+class PedidoGrandeVariosColores(TestCase):
+    def test_100_camisas_de_varios_colores_y_tallas_en_un_solo_pedido(self):
+        from tienda import demo
+
+        demo.cargar_catalogo()
+        pk = lambda col, t: Prenda.objects.get(modelo="Camisa escolar manga corta", color=col, talla=t).pk
+        pedido = [("Blanco", "CH", 20), ("Blanco", "M", 30), ("Blanco", "L", 15), ("Azul cielo", "M", 20), ("Azul cielo", "XL", 10), ("Beige", "XXL", 5)]
+        for col, t, n in pedido:
+            self.client.post(reverse("tienda:carrito_agregar"), {f"cant_{pk(col, t)}": n})  # cada tarjeta de color agrega al mismo pedido
+        r = self.client.get(reverse("tienda:carrito"))
+        self.assertEqual(r.context["piezas"], 100)
+        self.assertEqual(len(r.context["lineas"]), 6)
+        datos = {"accion": "pedir", "nombre": "Escuela Prueba", "telefono": "7774443322", "forma_pago": "CAJA"}
+        datos.update({f"cant_{pk(col, t)}": n for col, t, n in pedido})
+        self.assertEqual(self.client.post(reverse("tienda:carrito"), datos).status_code, 302)
+        ap = Apartado.objects.get(cliente__telefono="7774443322")
+        self.assertEqual((ap.piezas, ap.items.count()), (100, 6))
+        self.assertEqual({i.prenda.color for i in ap.items.all()}, {"Blanco", "Azul cielo", "Beige"})
+
+
+# ===========================================================================
+class RF07FechaEstimadaDeLlegada(Base):
+    def test_sin_existencia_el_catalogo_muestra_la_fecha_o_por_confirmar(self):
+        url = reverse("tienda:catalogo")
+        self.assertContains(self.client.get(url, {"modelo": "Camisa escolar", "color": "Blanco"}), "fecha por confirmar")
+        self.xxl.fecha_estimada_llegada = timezone.localdate() + timedelta(days=10)
+        self.xxl.save()
+        r = self.client.get(url, {"modelo": "Camisa escolar", "color": "Blanco"})
+        self.assertContains(r, f"Llegada estimada: {self.xxl.fecha_estimada_llegada:%d/%m/%Y}")
+
+    def test_con_existencia_no_se_muestra_fecha(self):
+        self.assertEqual(self.m.llegada_texto, "")
+
+    def test_el_gerente_captura_la_fecha_en_la_entrada_y_se_limpia_al_surtir(self):
+        self.client.force_login(self.gerente)
+        fecha = timezone.localdate() + timedelta(days=7)
+        self.client.post(reverse("tienda:entradas"), {"prenda": self.xxl.pk, "cantidad": 1, "proveedor": "Textiles SA", "fecha_estimada": fecha.isoformat()})
+        self.xxl.refresh_from_db()
+        self.assertEqual(self.xxl.fecha_estimada_llegada, fecha)
+        self.client.post(reverse("tienda:entradas"), {"prenda": self.xxl.pk, "cantidad": 5, "proveedor": "Textiles SA"})
+        self.xxl.refresh_from_db()
+        self.assertIsNone(self.xxl.fecha_estimada_llegada)

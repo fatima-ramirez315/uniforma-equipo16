@@ -40,7 +40,8 @@ class SeguimientoForm(StyledMixin, forms.Form):
 class PrendaForm(StyledMixin, forms.ModelForm):
     class Meta:
         model = Prenda
-        fields = ["codigo", "modelo", "categoria", "talla", "color", "precio", "stock", "stock_minimo", "activa"]
+        fields = ["codigo", "modelo", "categoria", "talla", "color", "precio", "stock", "stock_minimo", "fecha_estimada_llegada", "activa"]
+        widgets = {"fecha_estimada_llegada": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")}
         labels = {"stock_minimo": "Stock mínimo (alerta)", "activa": "Visible en catálogo"}
 
     def __init__(self, *args, **kwargs):
@@ -123,6 +124,8 @@ class EntradaForm(StyledMixin, forms.Form):
     cantidad = forms.IntegerField(label="Piezas recibidas", min_value=1)
     proveedor = forms.CharField(label="Proveedor", max_length=120)
     remision = forms.CharField(label="Folio de remisión", max_length=40, required=False)
+    fecha_estimada = forms.DateField(label="Fecha estimada de llegada del pendiente (opcional)", required=False,
+                                     widget=forms.DateInput(attrs={"type": "date"}))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -271,7 +271,7 @@ def procesar_vencimientos(ahora=None):
 # RF-16: entrada de mercancía
 # --------------------------------------------------------------------------
 @transaction.atomic
-def registrar_entrada(*, prenda, cantidad, proveedor, remision, usuario):
+def registrar_entrada(*, prenda, cantidad, proveedor, remision, usuario, fecha_estimada=None):
     prenda = Prenda.objects.select_for_update().get(pk=prenda.pk)
     cantidad = int(cantidad)
     if cantidad < 1:
@@ -281,7 +281,11 @@ def registrar_entrada(*, prenda, cantidad, proveedor, remision, usuario):
         prenda=prenda, cantidad=cantidad, proveedor=proveedor, remision=remision, registrado_por=usuario
     )
     prenda.stock += cantidad
-    prenda.save(update_fields=["stock"])
+    if fecha_estimada:  # RF-07: fecha en que llegará lo que sigue pendiente
+        prenda.fecha_estimada_llegada = fecha_estimada
+    elif prenda.stock > 0:
+        prenda.fecha_estimada_llegada = None
+    prenda.save(update_fields=["stock", "fecha_estimada_llegada"])
 
     # Avisar a quien esperaba esta prenda por encargo
     esperando = Apartado.objects.filter(

@@ -30,7 +30,7 @@ python manage.py runserver      # http://127.0.0.1:8000
 
 ## Pruebas
 ```bash
-python manage.py test           # 50 pruebas que cubren RF-01 a RF-16 y el pedido en línea
+python manage.py test           # 64 pruebas que cubren RF-01 a RF-16 (incluida la fecha estimada de llegada, RF-07) y el pedido en línea
 ```
 
 ## Cómo se usa

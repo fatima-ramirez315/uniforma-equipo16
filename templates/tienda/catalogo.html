@@ -43,7 +43,7 @@
       <tbody>{% for p in g.prendas %}<tr>
         <td><b>{{ p.talla }}</b> <span class="muted small">{{ p.talla_nombre }}</span></td>
         <td class="num">${{ p.precio|floatformat:"2g" }}</td>
-        <td>{% if p.stock == 0 %}<span class="tag bad">Agotada · por encargo</span>
+        <td>{% if p.stock == 0 %}<span class="tag bad">Agotada · por encargo</span><div class="small muted">{{ p.llegada_texto }}</div>
             {% elif p.stock <= p.stock_minimo %}<span class="tag warn">Últimas {{ p.stock }}</span>
             {% else %}<span class="tag ok">{{ p.stock }} pzas</span>{% endif %}</td>
         <td class="num"><input class="input qty" type="number" min="0" step="1" inputmode="numeric" name="cant_{{ p.pk }}" data-stock="{{ p.stock }}" placeholder="0" aria-label="Cantidad talla {{ p.talla }}">

@@ -18,6 +18,7 @@
       <td class="num">${{ l.prenda.precio|floatformat:"2g" }}</td>
       <td class="num"><input class="input qty" type="number" min="0" step="1" name="cant_{{ l.prenda.pk }}" value="{{ l.cantidad }}" data-precio="{{ l.prenda.precio }}" data-stock="{{ l.prenda.stock }}" aria-label="Cantidad"></td>
       <td>{% if l.por_encargo %}{% if l.de_inventario %}<span class="tag warn">{{ l.de_inventario }} en tienda + {{ l.por_encargo }} por encargo</span>{% else %}<span class="tag warn">{{ l.por_encargo }} por encargo</span>{% endif %}
+          {% if l.prenda.stock == 0 %}<div class="small muted">{{ l.prenda.llegada_texto }}</div>{% endif %}
           {% else %}<span class="tag ok">Todo en existencia</span>{% endif %}</td>
       <td class="num">${{ l.subtotal|floatformat:"2g" }}</td>
     </tr>{% endfor %}</tbody>

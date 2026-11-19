@@ -70,6 +70,7 @@ class Prenda(models.Model):
     stock = models.PositiveIntegerField(default=0)
     stock_minimo = models.PositiveIntegerField(default=3)
     activa = models.BooleanField(default=True)
+    fecha_estimada_llegada = models.DateField("Llegada estimada (si no hay existencia)", null=True, blank=True)
 
     class Meta:
         ordering = ["modelo", "color"]
@@ -93,6 +94,15 @@ class Prenda(models.Model):
         "Azul cielo": "#7dd3fc", "Azul rey": "#2563eb", "Rojo": "#dc2626", "Beige": "#e7d3b1", "Guinda": "#7f1d1d",
         "Vino": "#7b1f3a", "Verde quirófano": "#34d399",
     }
+
+    @property
+    def llegada_texto(self):
+        """RF-07: qué decirle al cliente cuando no hay existencia."""
+        if self.stock > 0:
+            return ""
+        if self.fecha_estimada_llegada:
+            return f"Llegada estimada: {self.fecha_estimada_llegada:%d/%m/%Y}"
+        return "Llegada: fecha por confirmar"
 
     @property
     def color_hex(self):
