@@ -88,6 +88,16 @@ class Prenda(models.Model):
     def stock_bajo(self):
         return self.activa and self.stock <= self.stock_minimo
 
+    COLORES_HEX = {
+        "Blanco": "#f8fafc", "Negro": "#111827", "Gris": "#9ca3af", "Gris Oxford": "#4b5563", "Azul marino": "#1e3a8a",
+        "Azul cielo": "#7dd3fc", "Azul rey": "#2563eb", "Rojo": "#dc2626", "Beige": "#e7d3b1", "Guinda": "#7f1d1d",
+        "Vino": "#7b1f3a", "Verde quirófano": "#34d399",
+    }
+
+    @property
+    def color_hex(self):
+        return self.COLORES_HEX.get(self.color, "#cbd5e1")
+
     @property
     def talla_nombre(self):
         """«Extra chica», «Mediana»… (sin la abreviatura)."""

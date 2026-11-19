@@ -41,12 +41,12 @@ def _grupos(prendas):
 
 
 def catalogo(request):
-    """RF-01: catálogo por categoría → modelo → talla, con cantidades para pedir (también para el cliente)."""
+    """RF-01: catálogo por categoría → modelo → color → talla, con cantidades para pedir (también para el cliente)."""
     base = Prenda.objects.filter(activa=True)
     categoria = request.GET.get("categoria", "")
     modelo = request.GET.get("modelo", "").strip()
+    color = request.GET.get("color", "").strip()
     talla = request.GET.get("talla", "").strip().upper()
-    q = request.GET.get("q", "").strip()
     solo_disp = request.GET.get("disponibles") == "1"
 
     prendas = base
@@ -54,27 +54,30 @@ def catalogo(request):
         prendas = prendas.filter(categoria=categoria)
     if modelo:
         prendas = prendas.filter(modelo=modelo)
+    if color:
+        prendas = prendas.filter(color=color)
     if talla:
         prendas = prendas.filter(talla=talla)
-    if q:
-        prendas = prendas.filter(Q(modelo__icontains=q) | Q(color__icontains=q) | Q(codigo__icontains=q))
     if solo_disp:
         prendas = prendas.filter(stock__gt=0)
 
     # Opciones de los filtros (cada uno depende del anterior) y mapa para el JavaScript
-    modelos = base.filter(categoria=categoria) if categoria else base
-    modelos_lista = sorted(set(modelos.values_list("modelo", flat=True)))
-    tallas_qs = modelos.filter(modelo=modelo) if modelo else modelos
-    presentes = set(tallas_qs.values_list("talla", flat=True))
+    en_cat = base.filter(categoria=categoria) if categoria else base
+    en_modelo = en_cat.filter(modelo=modelo) if modelo else en_cat
+    en_color = en_modelo.filter(color=color) if color else en_modelo
+    modelos_lista = sorted(set(en_cat.values_list("modelo", flat=True)))
+    colores = sorted(set(en_modelo.values_list("color", flat=True)))
+    presentes = set(en_color.values_list("talla", flat=True))
     tallas = [(t, n) for t, n in Prenda.TALLAS if t in presentes]
     mapa = {}
-    for c, m, t in base.values_list("categoria", "modelo", "talla"):
-        mapa.setdefault(c, {}).setdefault(m, set()).add(t)
-    mapa = {c: {m: [t for t in Prenda.ORDEN_TALLAS if t in ts] for m, ts in ms.items()} for c, ms in mapa.items()}
+    for c, m, col, t in base.values_list("categoria", "modelo", "color", "talla"):
+        mapa.setdefault(c, {}).setdefault(m, {}).setdefault(col, set()).add(t)
+    mapa = {c: {m: {col: [t for t in Prenda.ORDEN_TALLAS if t in ts] for col, ts in cols.items()} for m, cols in ms.items()}
+            for c, ms in mapa.items()}
 
     return render(request, "tienda/catalogo.html", {
-        "grupos": _grupos(prendas), "q": q, "categoria": categoria, "modelo": modelo, "talla": talla, "solo_disp": solo_disp,
-        "categorias": Prenda.CATEGORIAS, "modelos": modelos_lista, "tallas": tallas, "mapa": mapa,
+        "grupos": _grupos(prendas), "categoria": categoria, "modelo": modelo, "color": color, "talla": talla, "solo_disp": solo_disp,
+        "categorias": Prenda.CATEGORIAS, "modelos": modelos_lista, "colores": colores, "tallas": tallas, "mapa": mapa,
         "en_carrito": sum(_carrito(request).values()),
     })
 

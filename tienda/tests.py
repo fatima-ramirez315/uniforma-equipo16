@@ -29,6 +29,10 @@ class Base(TestCase):
         cls.m = mk("ESC-M", "M", 10)
         cls.l = mk("ESC-L", "L", 5)
         cls.xxl = mk("ESC-XXL", "XXL", 0, "220.00")
+        cls.rojo_m = Prenda.objects.create(
+            codigo="ESC-ROJ-M", modelo="Camisa escolar", categoria="ESCOLAR", talla="M", color="Rojo",
+            precio=Decimal("200.00"), stock=7, stock_minimo=3,
+        )
         cls.medico = Prenda.objects.create(
             codigo="MED-L", modelo="Pantalón médico", categoria="MEDICO", talla="L", color="Verde",
             precio=Decimal("320.00"), stock=4, stock_minimo=3,
@@ -56,11 +60,11 @@ class RF01Catalogo(Base):
     def test_catalogo_publico_agrupa_por_modelo_con_sus_tallas(self):
         r = self.client.get(reverse("tienda:catalogo"))
         self.assertEqual(r.status_code, 200)
-        self.assertEqual(len(r.context["grupos"]), 2)  # camisa y pantalón médico
+        self.assertEqual(len(r.context["grupos"]), 3)  # camisa blanca, camisa roja y pantalón médico
         self.assertContains(r, "XXL")
 
     def test_tallas_ordenadas_de_chica_a_grande(self):
-        grupo = self.client.get(reverse("tienda:catalogo"), {"modelo": "Camisa escolar"}).context["grupos"][0]
+        grupo = self.client.get(reverse("tienda:catalogo"), {"modelo": "Camisa escolar", "color": "Blanco"}).context["grupos"][0]
         self.assertEqual([p.talla for p in grupo["prendas"]], ["CH", "M", "L", "XXL"])
 
     def test_filtros_en_cascada_categoria_modelo_talla(self):
@@ -70,15 +74,27 @@ class RF01Catalogo(Base):
         r = self.client.get(reverse("tienda:catalogo"), {"categoria": "ESCOLAR", "modelo": "Camisa escolar", "talla": "CH"})
         self.assertEqual([p.talla for p in r.context["grupos"][0]["prendas"]], ["CH"])
 
+    def test_filtro_de_color_muestra_solo_ese_color(self):
+        r = self.client.get(reverse("tienda:catalogo"), {"modelo": "Camisa escolar"})
+        self.assertEqual(r.context["colores"], ["Blanco", "Rojo"])  # el modelo existe en varios colores
+        r = self.client.get(reverse("tienda:catalogo"), {"modelo": "Camisa escolar", "color": "Blanco"})
+        self.assertEqual([g["color"] for g in r.context["grupos"]], ["Blanco"])
+        self.assertEqual([t for t, _ in r.context["tallas"]], ["CH", "M", "L", "XXL"])
+        r = self.client.get(reverse("tienda:catalogo"), {"modelo": "Camisa escolar", "color": "Rojo"})
+        self.assertEqual([t for t, _ in r.context["tallas"]], ["M"])
+
+    def test_el_catalogo_ya_no_tiene_buscador(self):
+        self.assertNotContains(self.client.get(reverse("tienda:catalogo")), 'name="q"')
+
     def test_solo_con_existencia(self):
-        r = self.client.get(reverse("tienda:catalogo"), {"modelo": "Camisa escolar", "disponibles": "1"})
+        r = self.client.get(reverse("tienda:catalogo"), {"modelo": "Camisa escolar", "color": "Blanco", "disponibles": "1"})
         self.assertEqual([p.talla for p in r.context["grupos"][0]["prendas"]], ["CH", "M", "L"])
 
-    def test_el_filtro_de_categoria_aparece_antes_que_buscar(self):
+    def test_orden_de_los_filtros(self):
         html = self.client.get(reverse("tienda:catalogo")).content.decode()
         self.assertLess(html.index('id="categoria"'), html.index('id="modelo"'))
-        self.assertLess(html.index('id="modelo"'), html.index('id="talla"'))
-        self.assertLess(html.index('id="talla"'), html.index('id="q"'))
+        self.assertLess(html.index('id="modelo"'), html.index('id="color"'))
+        self.assertLess(html.index('id="color"'), html.index('id="talla"'))
 
 
 # ===========================================================================
@@ -458,3 +474,29 @@ class FlujoWeb(Base):
         self.client.post(reverse("tienda:apartado_entregar", args=[ap.pk]))
         ap.refresh_from_db()
         self.assertEqual(ap.estado, Apartado.ENTREGADO)
+
+
+# ===========================================================================
+class DatosDeDemostracion(TestCase):
+    def test_catalogo_completo_con_varios_colores_y_es_repetible(self):
+        from tienda import demo
+
+        n = demo.cargar_catalogo()
+        self.assertGreater(n, 100)
+        self.assertEqual(demo.cargar_catalogo(), 0)  # repetirlo no duplica nada
+        camisa = Prenda.objects.filter(modelo="Camisa escolar manga corta")
+        self.assertEqual(set(camisa.values_list("color", flat=True)), {"Blanco", "Azul cielo", "Beige"})
+        self.assertEqual(camisa.filter(color="Blanco").count(), 6)  # XS a XXL
+
+    def test_autoseed_solo_con_la_variable_activada(self):
+        import os
+        from unittest import mock
+        from tienda import demo
+
+        with mock.patch.dict(os.environ, {"AUTOSEED_DEMO": "0"}):
+            demo.autoseed()
+        self.assertEqual(Prenda.objects.count(), 0)
+        with mock.patch.dict(os.environ, {"AUTOSEED_DEMO": "1", "DEMO_GERENTE_PASSWORD": "Abc12345!x", "DEMO_VENDEDOR_PASSWORD": "Def12345!x"}):
+            demo.autoseed()
+        self.assertGreater(Prenda.objects.count(), 100)
+        self.assertTrue(User.objects.filter(username="gerente").exists())

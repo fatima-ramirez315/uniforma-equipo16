@@ -69,7 +69,7 @@ def crear_pedido(*, cliente, lineas, vendedor=None, anticipo=None, metodo="EFECT
 
     en_mostrador = vendedor is not None
     ahora = timezone.now()
-    dias = settings.VIGENCIA_APARTADO_DIAS if en_mostrador else settings.SOLICITUD_VIGENCIA_DIAS
+    dias = settings.VIGENCIA_APARTADO_DIAS if en_mostrador else getattr(settings, "SOLICITUD_VIGENCIA_DIAS", 7)
     ap = Apartado.objects.create(
         cliente=cliente,
         origen=Apartado.MOSTRADOR if en_mostrador else Apartado.EN_LINEA,
